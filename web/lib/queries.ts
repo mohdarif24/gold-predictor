@@ -150,6 +150,102 @@ export async function getPerformance(run: Run, name: string) {
   };
 }
 
+type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** Percentage change between the last value and the value `back` observations earlier. */
+function change(values: number[], back: number): number | null {
+  if (values.length <= back) return null;
+  const old = values[values.length - 1 - back];
+  return old ? values[values.length - 1] / old - 1 : null;
+}
+
+export async function getDrivers(run: Run, name: string) {
+  const inst = await requireInstrument(run, name);
+  const [research, reports, explanations, series] = await Promise.all([
+    run<{ horizon: string; body: string }>("SELECT horizon, body FROM research WHERE instrument = $1", [name]),
+    run<{ body: string }>("SELECT body FROM reports WHERE instrument = $1", [name]),
+    run<{ horizon: string; body: string }>("SELECT horizon, body FROM explanations WHERE instrument = $1", [name]),
+    run<{ name: string; ts: string; value: number }>(
+      "SELECT name, ts, value FROM series WHERE name LIKE 'driver:%' OR name LIKE 'cot_%' ORDER BY name, ts",
+    ),
+  ]);
+  const study = new Map(research.map((r) => [r.horizon, JSON.parse(r.body) as Json]));
+  const walk: Json = reports[0] ? JSON.parse(reports[0].body) : {};
+  const expl = new Map(explanations.map((r) => [r.horizon, JSON.parse(r.body) as Json]));
+
+  const horizons = inst.horizons.map((h) => {
+    const s = study.get(h);
+    const w = walk[h];
+    const hold = s?.holdout;
+    // The headline accuracy is the locked hold-out when a study exists; otherwise the plain walk-forward test.
+    const accuracy = hold
+      ? {
+          source: "holdout", accuracy: hold.accuracy ?? null, baseline: hold.baseline_accuracy ?? null, auc: hold.auc ?? null,
+          auc_ci: hold.auc_ci ?? null, n: hold.n ?? null, period: hold.period ?? null, has_edge: Boolean(hold.has_edge),
+        }
+      : w
+        ? {
+            source: "walk_forward", accuracy: w.accuracy ?? null, baseline: w.baseline_accuracy ?? null, auc: w.auc ?? null,
+            auc_ci: null, n: w.n ?? null, period: null, has_edge: Boolean(w.has_edge),
+          }
+        : null;
+    return {
+      horizon: h,
+      accuracy,
+      model: s?.selected?.model ?? w?.model ?? null,
+      feature_set: s?.selected?.feature_set ?? w?.feature_set ?? null,
+      candidates_tested: s?.protocol?.candidates_tested ?? null,
+      selective: hold?.selective ?? null,
+      high_confidence: hold?.high_confidence ?? null,
+      explanation: expl.get(h) ?? null,
+    };
+  });
+
+  const byName = new Map<string, { ts: string; value: number }[]>();
+  for (const r of series) {
+    if (!byName.has(r.name)) byName.set(r.name, []);
+    byName.get(r.name)!.push({ ts: r.ts, value: r.value });
+  }
+  const drivers = [...byName.entries()]
+    .filter(([n]) => n.startsWith("driver:"))
+    .map(([n, pts]) => {
+      const v = pts.map((p) => p.value);
+      return { key: n.slice(7), last: v[v.length - 1], asof: pts[pts.length - 1].ts, chg1: change(v, 1), chg5: change(v, 5), chg20: change(v, 20) };
+    });
+  const cot = (n: string) => byName.get(n)?.at(-1);
+  const positioning = cot("cot_mm_net")
+    ? { speculators_net: cot("cot_mm_net")!.value, hedgers_net: cot("cot_pm_net")?.value ?? null, rank3y: cot("cot_mm_rank3y")?.value ?? null, asof: cot("cot_mm_net")!.ts }
+    : null;
+  return { instrument: name, horizons, drivers, positioning };
+}
+
+const iso = (d: Date) => d.toISOString().slice(0, 19); // second precision, comparable with the stored UTC text
+
+/** Latest headlines with what they imply for gold, the overall mood, and the next scheduled events. */
+export async function getNews(run: Run, now: Date = new Date()) {
+  const [articles, events] = await Promise.all([
+    run<{ published: string; source: string; title: string; url: string; topic: string; sentiment: number; impact: string; summary: string | null; scorer: string }>(
+      "SELECT published, source, title, url, topic, sentiment, impact, summary, scorer FROM news ORDER BY published DESC LIMIT 40",
+    ),
+    run<{ ts: string; country: string; title: string; impact: string; forecast: string | null; previous: string | null }>(
+      "SELECT ts, country, title, impact, forecast, previous FROM events WHERE ts >= $1 ORDER BY ts LIMIT 12",
+      [iso(new Date(now.getTime() - 2 * 3600_000))],
+    ),
+  ]);
+  const since = iso(new Date(now.getTime() - 24 * 3600_000));
+  const recent = articles.filter((a) => a.published.slice(0, 19) >= since);
+  const mean = recent.length ? recent.reduce((s, a) => s + a.sentiment, 0) / recent.length : null;
+  const bucket = (x: number) => (x >= 0.2 ? "bullish" : x <= -0.2 ? "bearish" : "neutral");
+  return {
+    mood: {
+      score: mean, label: mean === null ? null : bucket(mean), count: recent.length,
+      bullish: recent.filter((a) => a.sentiment >= 0.2).length, bearish: recent.filter((a) => a.sentiment <= -0.2).length,
+    },
+    articles: articles.map((a) => ({ ...a, label: bucket(a.sentiment) })),
+    events,
+  };
+}
+
 export type AlertSettings = { telegram_on: boolean; telegram_chat_id: string | null; email_on: boolean };
 
 export async function getAlerts(run: Run, email: string): Promise<AlertSettings> {

@@ -27,6 +27,14 @@ CREATE TABLE IF NOT EXISTS shadow_trades(
 CREATE TABLE IF NOT EXISTS heartbeat(instrument TEXT PRIMARY KEY, ts TEXT);
 CREATE TABLE IF NOT EXISTS models(name TEXT PRIMARY KEY, blob {blob}, meta TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS reports(instrument TEXT PRIMARY KEY, body TEXT, updated TEXT);
+CREATE TABLE IF NOT EXISTS research(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
+CREATE TABLE IF NOT EXISTS explanations(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
+CREATE TABLE IF NOT EXISTS series(name TEXT, ts TEXT, value {real}, PRIMARY KEY(name, ts));
+CREATE TABLE IF NOT EXISTS news(
+  id TEXT PRIMARY KEY, published TEXT, source TEXT, title TEXT, url TEXT, topic TEXT, sentiment {real}, impact TEXT,
+  summary TEXT, scorer TEXT
+);
+CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, ts TEXT, country TEXT, title TEXT, impact TEXT, forecast TEXT, previous TEXT);
 CREATE TABLE IF NOT EXISTS candles(
   instrument TEXT, tf TEXT, ts {big}, open {real}, high {real}, low {real}, close {real},
   PRIMARY KEY(instrument, tf, ts)
@@ -186,6 +194,57 @@ def save_report(db: Db, instrument: str, report: dict):
 def load_report(db: Db, instrument: str) -> dict:
     row = db.execute("SELECT body FROM reports WHERE instrument=?", (instrument,)).fetchone()
     return json.loads(row["body"]) if row else {}
+
+
+def save_series(db: Db, name: str, s, keep: int = 70):
+    """Publish the recent daily values of one input (a market price, a positioning number...) for the website."""
+    s = s.dropna()
+    s = s[~s.index.duplicated(keep="last")].tail(keep)
+    for i in range(0, len(s), 100):
+        part = list(zip(s.index[i:i + 100], s.values[i:i + 100]))
+        db.execute(
+            "INSERT INTO series(name, ts, value) VALUES " + ",".join(["(?,?,?)"] * len(part))
+            + " ON CONFLICT(name, ts) DO UPDATE SET value=excluded.value",
+            [v for ts, val in part for v in (name, str(pd_date(ts)), float(val))],
+        )
+    db.commit()
+
+
+def pd_date(ts) -> str:
+    """Daily series are keyed by calendar date text."""
+    return str(ts)[:10]
+
+
+def _save_json_row(db: Db, table: str, instrument: str, horizon: str, body: dict):
+    db.execute(
+        f"INSERT INTO {table}(instrument, horizon, body, updated) VALUES(?,?,?,?) "
+        "ON CONFLICT(instrument, horizon) DO UPDATE SET body=excluded.body, updated=excluded.updated",
+        (instrument, horizon, dumps(body), now_iso()),
+    )
+    db.commit()
+
+
+def _load_json_row(db: Db, table: str, instrument: str, horizon: str):
+    row = db.execute(f"SELECT body FROM {table} WHERE instrument=? AND horizon=?", (instrument, horizon)).fetchone()
+    return json.loads(row["body"]) if row else None
+
+
+def save_research(db: Db, instrument: str, horizon: str, body: dict):
+    """Result of the locked hold-out study for one instrument and horizon."""
+    _save_json_row(db, "research", instrument, horizon, body)
+
+
+def load_research(db: Db, instrument: str, horizon: str):
+    return _load_json_row(db, "research", instrument, horizon)
+
+
+def save_explanation(db: Db, instrument: str, horizon: str, body: dict):
+    """What drove the latest reading (shown on the 'what gold depends on' screen)."""
+    _save_json_row(db, "explanations", instrument, horizon, body)
+
+
+def load_explanation(db: Db, instrument: str, horizon: str):
+    return _load_json_row(db, "explanations", instrument, horizon)
 
 
 # ---------- data for the website ----------

@@ -2,23 +2,34 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-from .models import fit
+from .models import context_rows, fit
 
 
-def walk_forward(X: pd.DataFrame, y: pd.Series, steps: int, n_splits: int = 5, min_train_frac: float = 0.4) -> pd.DataFrame:
-    """Expanding-window walk-forward. A `steps`-bar purge gap keeps overlapping labels out of the train set."""
+def walk_forward(X: pd.DataFrame, y: pd.Series, steps: int, n_splits: int = 5, min_train_frac: float = 0.4,
+                 model: str = "lgbm", test_start: int | None = None, test_end: int | None = None) -> pd.DataFrame:
+    """Expanding-window walk-forward. A `steps`-bar purge gap keeps overlapping labels out of the train set.
+
+    Tests the rows [test_start, test_end) in `n_splits` blocks; each block is predicted by a model trained only on rows
+    before it (minus the gap). Defaults reproduce the original behaviour: the last 60% of the data.
+    Models that need earlier rows (LSTM) receive them as context; the context only contains rows already known.
+    """
     n = len(X)
-    start = int(n * min_train_frac)
-    edges = np.linspace(start, n, n_splits + 1).astype(int)
+    start = int(n * min_train_frac) if test_start is None else test_start
+    end = n if test_end is None else test_end
+    edges = np.linspace(start, end, n_splits + 1).astype(int)
     parts = []
     for a, b in zip(edges[:-1], edges[1:]):
         tr_end = a - steps
         if tr_end < 100 or b <= a:
             continue
-        model = fit(X.iloc[:tr_end], y.iloc[:tr_end])
-        p = model.predict_proba(X.iloc[a:b])[:, 1]
-        base = float(y.iloc[:tr_end].mean())
-        parts.append(pd.DataFrame({"p": p, "y": y.iloc[a:b].values, "base_p": base}, index=X.index[a:b]))
+        m = fit(X.iloc[:tr_end], y.iloc[:tr_end], model)
+        k = context_rows(m)
+        Xt = X.iloc[max(0, a - k):b]
+        p = m.predict_proba(Xt)[-(b - a):, 1]
+        cols = {"p": p, "y": y.iloc[a:b].values, "base_p": float(y.iloc[:tr_end].mean())}
+        if hasattr(m, "predict_confidence"):
+            cols["conf"] = m.predict_confidence(Xt)[-(b - a):]
+        parts.append(pd.DataFrame(cols, index=X.index[a:b]))
     return pd.concat(parts) if parts else pd.DataFrame(columns=["p", "y", "base_p"])
 
 

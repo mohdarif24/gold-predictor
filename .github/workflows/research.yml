@@ -1,23 +1,26 @@
-name: predict
+name: research
 
-# One pass: settle virtual trades, make fresh predictions, publish candles + heartbeat, send alerts.
-# GitHub's scheduler is best-effort: runs can start 5-15 minutes late and an occasional run is skipped.
+# The locked hold-out study: tries every model and input set on older data, then tests the one winner ONCE on the
+# newest 20%. It takes a long time, so it runs monthly or by hand, and then retrains the live models with the result.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 3 1 * *"   # 1st of each month, 03:00 UTC
   workflow_dispatch:
-
-concurrency:
-  group: predict
-  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  tick:
+  study:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        instrument: [xauusd_yf, nse_etf]
+    concurrency:
+      group: research-${{ matrix.instrument }}
+      cancel-in-progress: false
     steps:
       - id: gate
         run: |
@@ -34,23 +37,21 @@ jobs:
           cache-dependency-path: requirements-ci.txt
       - run: pip install -r requirements-ci.txt
         if: steps.gate.outputs.ok == 'true'
-      # yfinance only serves ~60 days of intraday bars; keeping what we fetched lets the history grow
       - uses: actions/cache@v4
         if: steps.gate.outputs.ok == 'true'
         with:
           path: data
           key: bars-${{ github.run_id }}
           restore-keys: bars-
-      - run: python run.py all tick
+      - run: python run.py ${{ matrix.instrument }} init-db
         if: steps.gate.outputs.ok == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_API_URL: ${{ secrets.LLM_API_URL }}
-          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+      - run: python -u -m research.study ${{ matrix.instrument }}
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: python run.py ${{ matrix.instrument }} train
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

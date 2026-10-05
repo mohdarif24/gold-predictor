@@ -113,3 +113,36 @@ export type HistoryRow = {
   has_edge: number;
   outcome_up: number | null;
 };
+
+export type SelectiveRow = { coverage: number; n: number; accuracy: number; ci_lo: number; ci_hi: number };
+export type HighConfRow = { says_at_least: number; n: number; accuracy: number | null; ci_lo: number | null; ci_hi: number | null };
+export type Share = { push: number; share: number };
+export type DriversHorizon = {
+  horizon: string;
+  accuracy: {
+    source: "holdout" | "walk_forward"; accuracy: number | null; baseline: number | null; auc: number | null;
+    auc_ci: [number, number] | null; n: number | null; period: [string, string] | null; has_edge: boolean;
+  } | null;
+  model: string | null;
+  feature_set: string | null;
+  candidates_tested: number | null;
+  selective: { by_probability?: SelectiveRow[]; by_meta_model?: SelectiveRow[] } | null;
+  high_confidence: HighConfRow[] | null;
+  explanation: {
+    p_up: number; model?: string; feature_set?: string; bar_ts?: string;
+    groups: Record<string, Share>; recency: Record<string, Share>;
+    top: { feature: string; group: string; value: number | null; push: number }[];
+  } | null;
+};
+export type DriversResponse = {
+  instrument: string;
+  horizons: DriversHorizon[];
+  drivers: { key: string; last: number; asof: string; chg1: number | null; chg5: number | null; chg20: number | null }[];
+  positioning: { speculators_net: number; hedgers_net: number | null; rank3y: number | null; asof: string } | null;
+};
+
+export type NewsResponse = {
+  mood: { score: number | null; label: "bullish" | "bearish" | "neutral" | null; count: number; bullish: number; bearish: number };
+  articles: { published: string; source: string; title: string; url: string; topic: string; sentiment: number; impact: string; summary: string | null; scorer: string; label: "bullish" | "bearish" | "neutral" }[];
+  events: { ts: string; country: string; title: string; impact: string; forecast: string | null; previous: string | null }[];
+};

@@ -54,8 +54,24 @@ instruments:
 
 # Daily-only macro drivers from yfinance (lagged 1 day to avoid look-ahead)
 drivers:
-  usdinr: "USDINR=X"
+  # dollar and rates: gold usually falls when the dollar and real yields rise
   dxy: "DX-Y.NYB"
+  usdinr: "USDINR=X"
+  eurusd: "EURUSD=X"
+  usdjpy: "JPY=X"
+  usdcny: "CNY=X"
+  us3m: "^IRX"
+  us5y: "^FVX"
   us10y: "^TNX"
-  oil: "CL=F"
+  us30y: "^TYX"
+  tips: "TIP"          # inflation-protected bonds (real-yield proxy)
+  tlt: "TLT"           # long nominal bonds
+  # related metals and miners
   global_gold: "GC=F"
+  silver: "SI=F"
+  copper: "HG=F"
+  gdx: "GDX"           # gold miners
+  # risk mood and growth
+  vix: "^VIX"
+  spx: "^GSPC"
+  oil: "CL=F"

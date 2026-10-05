@@ -32,11 +32,15 @@ Python 3.13 only if you want to run things locally. Optional: a Telegram bot (vi
 | `CLOUDFLARE_API_TOKEN` | deploy job (token template "Edit Cloudflare Workers") |
 | `CLOUDFLARE_ACCOUNT_ID` | deploy job (shown on the Cloudflare dashboard) |
 | `TELEGRAM_BOT_TOKEN` | Telegram alerts (optional) |
+| `LLM_API_KEY`, `LLM_API_URL`, `LLM_MODEL` | an AI model that reads news headlines (optional, see below) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | email alerts (optional) |
 
    With the GitHub CLI: `gh secret set DATABASE_URL`.
 3. **Actions** tab > `train` > **Run workflow**. This creates the tables and trains the models (a few minutes).
 4. **Actions** tab > `predict` > **Run workflow**. Check it is green. From now on it runs every 15 minutes by itself.
+5. **Actions** tab > `research` > **Run workflow** (takes hours, no need to watch). It tries every model and every input set on older
+   data, tests the single winner once on the newest 20% (the locked hold-out), and retrains the live models with the result.
+   It then runs by itself on the 1st of each month. Until it has run, the app uses a default model and says so.
 
 ## 3. Cloudflare (website)
 1. Run the `deploy` workflow (Actions tab) or push a change under `web/`. The first run creates the Worker
@@ -56,7 +60,13 @@ Python 3.13 only if you want to run things locally. Optional: a Telegram bot (vi
 
 To add a client later: add their email to the Access policy. Nothing else.
 
-## 4. Alerts (optional)
+## 4. News reading with an AI model (optional)
+Without a key, headlines are read by keyword rules (always works, less subtle). To use an AI model set `LLM_API_KEY` to a key from any
+provider with an OpenAI-compatible chat API, and optionally `LLM_API_URL` (the full `.../chat/completions` address) and `LLM_MODEL`.
+Free tiers exist at several providers and change often; check the provider's current limits. If the model fails or runs out of quota the
+rules take over, so the site never breaks. Headline readings are automatic guesses and can be wrong.
+
+## 4b. Alerts (optional)
 Add the Telegram and/or SMTP secrets in GitHub. Each person turns alerts on in the site's **Alerts** page. For Telegram they
 message `@userinfobot` once to learn their chat ID, and press **Start** on your bot so it may write to them.
 Only new Buy/Sell signals send alerts, never Wait.

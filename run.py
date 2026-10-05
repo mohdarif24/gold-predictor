@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from core import alerts, pipeline, store
+from core import alerts, news, pipeline, store
 
 try:  # local convenience only; CI passes real environment variables
     from dotenv import load_dotenv
@@ -20,6 +20,7 @@ except ImportError:
     pass
 
 CHART_TFS = ("D1", "H1")
+_last_news = 0.0  # news and events are shared by every instrument: refresh at most every 10 minutes per process
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -49,12 +50,25 @@ def targets(cfg: dict, which: str) -> list:
     return [k for k, v in cfg["instruments"].items() if v.get("enabled", True) and v["source"] != "mt5"]
 
 
+def refresh_news_once(db):
+    global _last_news
+    if time.time() - _last_news < 600:
+        return
+    _last_news = time.time()
+    try:
+        print(f"news: {news.refresh_news(db)} new headlines, {news.refresh_events(db)} calendar events", flush=True)
+    except Exception as e:  # news is extra context; never block predictions
+        db.rollback()
+        print(f"news skipped: {e}", flush=True)
+
+
 def run_command(command: str, name: str, cfg: dict, db):
     raw_bars, get_drivers = providers(name, cfg)
     get_bars = lru_cache(maxsize=None)(raw_bars)  # one download per timeframe per pass
+    get_news = lambda: news.news_features(db)  # noqa: E731  daily news mood collected so far (empty at first)
 
     if command == "train":
-        for hz, m in pipeline.train(name, cfg, get_bars, get_drivers, db).items():
+        for hz, m in pipeline.train(name, cfg, get_bars, get_drivers, db, get_news=get_news).items():
             print(f"[{name} {hz}] rows={m['rows']} auc={m.get('auc')} acc={m.get('accuracy')} "
                   f"base={m.get('baseline_accuracy')} net={m.get('net_return_total')} "
                   f"edge={m['has_edge']} :: {m['reason']}", flush=True)
@@ -63,7 +77,8 @@ def run_command(command: str, name: str, cfg: dict, db):
     elif command in ("predict", "tick"):
         if command == "tick":
             pipeline.update(name, cfg, get_bars, db)
-        results = pipeline.predict(name, cfg, get_bars, get_drivers, db)
+            refresh_news_once(db)
+        results = pipeline.predict(name, cfg, get_bars, get_drivers, db, get_news=get_news)
         show(results)
         try:
             alerts.notify_new(db, cfg, results)
@@ -76,6 +91,16 @@ def run_command(command: str, name: str, cfg: dict, db):
                 except Exception as e:  # the chart is a nicety; predictions already saved
                     db.rollback()
                     print(f"candles {name} {tf} skipped: {e}", flush=True)
+            try:  # the inputs themselves, for the 'what gold depends on' screen
+                for dn, s in get_drivers().items():
+                    store.save_series(db, f"driver:{dn}", s)
+                cot = pipeline.load_cot(cfg)
+                if cot is not None:
+                    for col in ("cot_mm_net", "cot_pm_net", "cot_mm_rank3y"):
+                        store.save_series(db, col, cot[col])
+            except Exception as e:
+                db.rollback()
+                print(f"input series skipped: {e}", flush=True)
             store.beat(db, name)
 
 

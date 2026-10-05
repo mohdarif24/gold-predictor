@@ -142,3 +142,74 @@ describe("alert settings", () => {
     await expect(q.putAlerts(run, "b@x.com", { telegram_chat_id: "abc; DROP TABLE users" })).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe("drivers screen", () => {
+  beforeAll(async () => {
+    const hold = { accuracy: 0.52, baseline_accuracy: 0.54, auc: 0.51, auc_ci: [0.47, 0.55], n: 700, period: ["2025-01-01", "2026-10-01"], has_edge: false,
+      selective: { by_probability: [{ coverage: 1, n: 700, accuracy: 0.52 }] }, high_confidence: [{ says_at_least: 0.8, n: 0, accuracy: null }] };
+    await db.query("INSERT INTO research VALUES('gold','1d',$1,'now')", [JSON.stringify({ selected: { feature_set: "flow", model: "rf" }, holdout: hold, protocol: { candidates_tested: 18 } })]);
+    await db.query("INSERT INTO explanations VALUES('gold','1d',$1,'now')", [JSON.stringify({ p_up: 0.55, groups: { macro: { push: 1.2, share: 0.6 } }, recency: { latest: { push: 0.4, share: 0.3 } }, top: [] })]);
+    for (let i = 0; i < 25; i++) {
+      await db.query("INSERT INTO series VALUES('driver:dxy', $1, $2)", [`2026-09-${String(i + 1).padStart(2, "0")}`, 100 + i]);
+    }
+    // a horizon with only a plain walk-forward report (no hold-out study yet)
+    await db.query("UPDATE reports SET body = $1 WHERE instrument = 'gold'", [JSON.stringify({
+      "1d": { auc: 0.51, accuracy: 0.5, baseline_accuracy: 0.52, n_trades: 3, has_edge: false },
+      "1w": { auc: 0.52, accuracy: 0.5, baseline_accuracy: 0.51, n: 400, has_edge: false } })]);
+    await db.exec("INSERT INTO series VALUES('cot_mm_net','2026-10-03',0.3),('cot_pm_net','2026-10-03',-0.05),('cot_mm_rank3y','2026-10-03',0.55)");
+  });
+
+  it("uses the locked hold-out for accuracy when a study exists, walk-forward otherwise, nothing when neither", async () => {
+    const d = await q.getDrivers(run, "gold");
+    const by = Object.fromEntries(d.horizons.map((h) => [h.horizon, h]));
+    expect(by["1d"].accuracy).toMatchObject({ source: "holdout", accuracy: 0.52, baseline: 0.54, has_edge: false });
+    expect(by["1d"].model).toBe("rf");
+    expect(by["1d"].candidates_tested).toBe(18);
+    expect(by["1w"].accuracy).toMatchObject({ source: "walk_forward", accuracy: 0.5 });
+    expect(by["30m"].accuracy).toBeNull();
+    expect(by["1d"].explanation?.groups.macro.share).toBe(0.6);
+    expect(by["1d"].high_confidence?.[0]).toMatchObject({ says_at_least: 0.8, n: 0 });
+  });
+
+  it("computes each driver's recent changes from its stored history", async () => {
+    const d = await q.getDrivers(run, "gold");
+    const dxy = d.drivers.find((x) => x.key === "dxy")!;
+    expect(dxy.last).toBe(124);
+    expect(dxy.chg1).toBeCloseTo(124 / 123 - 1);
+    expect(dxy.chg5).toBeCloseTo(124 / 119 - 1);
+    expect(dxy.chg20).toBeCloseTo(124 / 104 - 1);
+    expect(d.positioning).toMatchObject({ speculators_net: 0.3, rank3y: 0.55 });
+  });
+});
+
+describe("news and events", () => {
+  beforeAll(async () => {
+    const add = "INSERT INTO news(id, published, source, title, url, topic, sentiment, impact, summary, scorer) VALUES($1,$2,'wsj','t','https://x',$3,$4,'high',NULL,'rules')";
+    await db.query(add, ["a", "2026-10-05T10:00:00+00:00", "rates", -0.8]);
+    await db.query(add, ["b", "2026-10-05T11:00:00+00:00", "price", 0.5]);
+    await db.query(add, ["c", "2026-10-05T12:00:00+00:00", "dollar", 0.0]);
+    await db.query(add, ["d", "2026-09-20T12:00:00+00:00", "price", 1.0]); // too old for the 24-hour mood
+    const ev = "INSERT INTO events(id, ts, country, title, impact) VALUES($1,$2,'USD',$3,'high')";
+    await db.query(ev, ["e1", "2026-10-05T09:00+00:00", "Already passed long ago"]);
+    await db.query(ev, ["e2", "2026-10-06T18:00+00:00", "FOMC Meeting Minutes"]);
+    await db.query(ev, ["e3", "2026-10-05T13:00+00:00", "Happened an hour ago"]);
+  });
+
+  it("summarises the last 24 hours and labels each headline", async () => {
+    const n = await q.getNews(run, new Date("2026-10-05T14:00:00Z"));
+    expect(n.articles[0].label).toBe("neutral"); // newest first
+    expect(n.mood).toMatchObject({ count: 3, bullish: 1, bearish: 1, label: "neutral" });
+    expect(n.mood.score).toBeCloseTo((-0.8 + 0.5 + 0) / 3);
+    expect(n.articles.find((a) => a.url === "https://x" && a.sentiment === -0.8)?.label).toBe("bearish");
+  });
+
+  it("lists upcoming events, keeping the last two hours and dropping older ones", async () => {
+    const n = await q.getNews(run, new Date("2026-10-05T14:00:00Z"));
+    expect(n.events.map((e) => e.title)).toEqual(["Happened an hour ago", "FOMC Meeting Minutes"]);
+  });
+
+  it("has no mood when there are no recent headlines", async () => {
+    const n = await q.getNews(run, new Date("2027-01-01T00:00:00Z"));
+    expect(n.mood).toMatchObject({ score: null, label: null, count: 0 });
+  });
+});

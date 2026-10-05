@@ -1,10 +1,13 @@
 # Exactly what the scheduled jobs install on GitHub's Linux runners (no MT5, no dashboard).
 # These are the versions the tests were run with; bump them together and re-run the tests.
+--extra-index-url https://download.pytorch.org/whl/cpu
 numpy==2.3.4
 pandas==2.2.3
 PyYAML==6.0.3
 scikit-learn==1.9.1
 lightgbm==4.7.0
+xgboost==3.4.1
+torch==2.11.0
 yfinance==1.7.0
 pyarrow==25.0.1
 joblib==1.6.0

@@ -94,10 +94,31 @@ Step "Optional alerts (press Enter to skip)"
 $tg = Read-Secret "Telegram bot token (from @BotFather), or Enter to skip"
 if ($tg -and $tg -ne "dry-run-value") { Set-GhSecret "TELEGRAM_BOT_TOKEN" $tg } else { Warn "Telegram skipped. Email alerts: see docs/DEPLOY.md" }
 
+Step "Optional: a free AI model to read news headlines (press Enter to skip)"
+Write-Host "   Without it, headlines are read by keyword rules, which always work. Any OpenAI-compatible provider works:"
+Write-Host "   GitHub Models, Groq, OpenRouter, Google Gemini (free tiers change; check the provider)."
+$llmKey = Read-Secret "API key for the AI model, or Enter to skip"
+if ($llmKey -and $llmKey -ne "dry-run-value") {
+    Set-GhSecret "LLM_API_KEY" $llmKey
+    $llmUrl = if ($DryRun) { "" } else { (Read-Host -Prompt "Chat-completions URL (Enter for GitHub Models)").Trim() }
+    $llmModel = if ($DryRun) { "" } else { (Read-Host -Prompt "Model name (Enter for openai/gpt-4o-mini)").Trim() }
+    if ($llmUrl) { Set-GhSecret "LLM_API_URL" $llmUrl }
+    if ($llmModel) { Set-GhSecret "LLM_MODEL" $llmModel }
+} else { Warn "AI model skipped; keyword rules will read the news." }
+
 # ---------------------------------------------------------------- 2. models + first predictions
 Step "2/5  Train the models (a few minutes) and make the first predictions"
 if (Run-Workflow "train.yml") { Ok "train finished" } else { Fail "train failed. Open the run link above to see why." }
 if (Run-Workflow "predict.yml") { Ok "predict finished; it now repeats by itself every ~15 minutes" } else { Fail "predict failed. Open the run link above." }
+
+Step "Optional: the full model study (takes hours on GitHub, no need to wait)"
+Write-Host "   It tries every model and input set on older data, tests the winner once on the newest 20%, and then retrains."
+Write-Host "   Until it has run, the app uses a default model and says so on the 'What moves gold' screen."
+$study = if ($DryRun) { "n" } else { Read-Host -Prompt "Start it now? (y/N)" }
+if ($study -match "^[yY]") {
+    & gh workflow run research.yml --repo $Repo | Out-Null
+    Ok "started; follow it under the Actions tab (workflow: research). It also runs by itself on the 1st of every month."
+} else { Warn "Skipped. Start it any time: Actions tab > research > Run workflow." }
 
 # ---------------------------------------------------------------- 3. cloudflare secrets
 Step "3/5  Cloudflare"

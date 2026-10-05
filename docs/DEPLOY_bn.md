@@ -29,11 +29,15 @@ GitHub, [Neon](https://neon.tech) আর [Cloudflare](https://dash.cloudflare.co
 | `CLOUDFLARE_API_TOKEN` | deploy job ("Edit Cloudflare Workers" template-এর token) |
 | `CLOUDFLARE_ACCOUNT_ID` | deploy job (Cloudflare dashboard-এ দেখায়) |
 | `TELEGRAM_BOT_TOKEN` | Telegram alert (ঐচ্ছিক) |
+| `LLM_API_KEY`, `LLM_API_URL`, `LLM_MODEL` | খবরের শিরোনাম পড়ার AI মডেল (ঐচ্ছিক, নিচে দেখুন) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | ইমেইল alert (ঐচ্ছিক) |
 
    GitHub CLI দিয়ে: `gh secret set DATABASE_URL`।
 3. **Actions** ট্যাব > `train` > **Run workflow**। এটা টেবিল বানায় আর মডেল প্রশিক্ষণ দেয় (কয়েক মিনিট)।
 4. **Actions** ট্যাব > `predict` > **Run workflow**। সবুজ হলে ঠিক। এরপর থেকে প্রতি ১৫ মিনিটে নিজে চলবে।
+5. **Actions** ট্যাব > `research` > **Run workflow** (কয়েক ঘণ্টা লাগে, বসে দেখতে হবে না)। এটা সব মডেল ও ইনপুট-সেট পুরনো ডেটায় চেষ্টা করে, একমাত্র
+   বিজয়ীকে নতুন ২০% ডেটায় (তালা-দেওয়া hold-out) একবার পরীক্ষা করে, আর ফল দিয়ে চালু মডেল নতুন করে শেখায়। এরপর প্রতি মাসের ১ তারিখে নিজে চলে।
+   এটা না চলা পর্যন্ত অ্যাপ একটা ডিফল্ট মডেল ব্যবহার করে এবং সে কথা জানায়।
 
 ## ৩. Cloudflare (ওয়েবসাইট)
 1. Actions থেকে `deploy` workflow চালান (বা `web/`-এ কোনো পরিবর্তন push করুন)। প্রথমবারে `gold-predictor` নামে Worker তৈরি হয়: `https://gold-predictor.<আপনার-subdomain>.workers.dev`।
@@ -48,7 +52,12 @@ GitHub, [Neon](https://neon.tech) আর [Cloudflare](https://dash.cloudflare.co
 
 নতুন client যোগ করতে: Access policy-তে তাঁর ইমেইল যোগ করুন। আর কিছু না।
 
-## ৪. Alert (ঐচ্ছিক)
+## ৪. AI মডেল দিয়ে খবর পড়া (ঐচ্ছিক)
+key না দিলে শিরোনাম কিওয়ার্ড-নিয়মে পড়া হয় (সবসময় কাজ করে, কম সূক্ষ্ম)। AI মডেল চাইলে যেকোনো OpenAI-সুসঙ্গত chat API-র key `LLM_API_KEY`-তে দিন, আর
+চাইলে `LLM_API_URL` (পুরো `.../chat/completions` ঠিকানা) ও `LLM_MODEL`। কয়েকটা পরিষেবার বিনামূল্যের plan আছে, তা প্রায়ই বদলায়, তাই বর্তমান সীমা দেখে নিন।
+মডেল ব্যর্থ হলে বা কোটা ফুরোলে নিয়ম কাজ চালায়, তাই সাইট ভাঙে না। শিরোনামের পাঠ স্বয়ংক্রিয় অনুমান, ভুল হতে পারে।
+
+## ৪খ. Alert (ঐচ্ছিক)
 GitHub-এ Telegram ও/বা SMTP Secret দিন। প্রত্যেকে সাইটের **অ্যালার্ট** পেজে নিজের alert চালু করবেন। Telegram-এর জন্য একবার `@userinfobot`-কে বার্তা দিয়ে নিজের chat ID জানতে হবে, আর আপনার bot-এ **Start** চাপতে হবে যাতে সে তাঁকে লিখতে পারে। শুধু নতুন কিনুন/বেচুন সংকেতে alert যায়, অপেক্ষায় কখনো না।
 
 ## ৫. যা ঘটবে (আগে থেকে জেনে রাখুন)

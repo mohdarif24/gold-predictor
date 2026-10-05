@@ -11,6 +11,14 @@ CREATE TABLE IF NOT EXISTS shadow_trades(
 CREATE TABLE IF NOT EXISTS heartbeat(instrument TEXT PRIMARY KEY, ts TEXT);
 CREATE TABLE IF NOT EXISTS models(name TEXT PRIMARY KEY, blob BYTEA, meta TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS reports(instrument TEXT PRIMARY KEY, body TEXT, updated TEXT);
+CREATE TABLE IF NOT EXISTS research(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
+CREATE TABLE IF NOT EXISTS explanations(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
+CREATE TABLE IF NOT EXISTS series(name TEXT, ts TEXT, value DOUBLE PRECISION, PRIMARY KEY(name, ts));
+CREATE TABLE IF NOT EXISTS news(
+  id TEXT PRIMARY KEY, published TEXT, source TEXT, title TEXT, url TEXT, topic TEXT, sentiment DOUBLE PRECISION, impact TEXT,
+  summary TEXT, scorer TEXT
+);
+CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, ts TEXT, country TEXT, title TEXT, impact TEXT, forecast TEXT, previous TEXT);
 CREATE TABLE IF NOT EXISTS candles(
   instrument TEXT, tf TEXT, ts BIGINT, open DOUBLE PRECISION, high DOUBLE PRECISION, low DOUBLE PRECISION, close DOUBLE PRECISION,
   PRIMARY KEY(instrument, tf, ts)
