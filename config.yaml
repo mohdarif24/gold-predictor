@@ -1,0 +1,61 @@
+# No secrets here. MT5 credentials (optional) go in .env: MT5_LOGIN, MT5_PASSWORD, MT5_SERVER
+db_path: store/predictor.db
+models_dir: models
+reports_dir: reports
+data_dir: data
+
+signal_threshold: 0.55      # BUY if P(up) >= thr, SELL if P(up) <= 1-thr, else WAIT
+shadow:
+  sl_atr: 1.5               # virtual stop loss = 1.5 x ATR
+  tp_atr: 2.0               # virtual take profit = 2.0 x ATR
+
+instruments:
+  xauusd:
+    label: "Gold (XAU/USD, Exness)"
+    enabled: false          # set to true (or delete) once MT5 is installed and `train` has run; hides it from the client app
+    source: mt5
+    symbol: XAUUSD          # Exness may use a suffix (XAUUSDm, XAUUSDz); check Market Watch
+    minutes_per_day: 1380
+    cost_bps: 1.5           # round-trip spread+slippage as basis points of price
+    htf: [H1, H4]           # higher timeframes added as features for intraday models
+    bars: {M5: 60000, H1: 20000, H4: 10000, D1: 4000}
+    horizons:
+      - {name: 30m, tf: M5, steps: 6}
+      - {name: 1h,  tf: M5, steps: 12}
+      - {name: 1d,  tf: D1, steps: 1}
+      - {name: 1w,  tf: D1, steps: 5}
+
+  # Gold futures (GC=F) via yfinance: works today without MT5. Prices track XAU/USD closely but are not Exness's feed.
+  xauusd_yf:
+    label: "Gold futures (global)"
+    source: yfinance
+    symbol: GC=F
+    minutes_per_day: 1380
+    cost_bps: 1.5
+    htf: [H1]
+    horizons:
+      - {name: 30m, tf: M5, steps: 6}
+      - {name: 1h,  tf: M5, steps: 12}
+      - {name: 1d,  tf: D1, steps: 1}
+      - {name: 1w,  tf: D1, steps: 5}
+
+  nse_etf:
+    label: "Gold ETF (India, NSE)"
+    source: yfinance
+    symbol: GOLDBEES.NS
+    minutes_per_day: 375
+    cost_bps: 5.0
+    htf: []
+    horizons:
+      - {name: 30m, tf: M15, steps: 2}
+      - {name: 1h,  tf: M15, steps: 4}
+      - {name: 1d,  tf: D1,  steps: 1}
+      - {name: 1w,  tf: D1,  steps: 5}
+
+# Daily-only macro drivers from yfinance (lagged 1 day to avoid look-ahead)
+drivers:
+  usdinr: "USDINR=X"
+  dxy: "DX-Y.NYB"
+  us10y: "^TNX"
+  oil: "CL=F"
+  global_gold: "GC=F"

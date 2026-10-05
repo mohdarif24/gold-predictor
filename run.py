@@ -1,0 +1,114 @@
+"""CLI:  python run.py <instrument|all> <init-db|train|predict|update|tick|loop>
+
+tick = one full cycle (settle trades, predict, publish candles for the website, heartbeat). This is what the
+GitHub Actions schedule runs. `all` means every enabled instrument that does not need a local MT5 terminal.
+Set DATABASE_URL to use Postgres (Neon); otherwise the SQLite file from config.yaml is used.
+"""
+import argparse
+import time
+from functools import lru_cache
+from pathlib import Path
+
+import yaml
+
+from core import alerts, pipeline, store
+
+try:  # local convenience only; CI passes real environment variables
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+CHART_TFS = ("D1", "H1")
+
+
+def load_config(path: str = "config.yaml") -> dict:
+    return yaml.safe_load(Path(path).read_text())
+
+
+def providers(name: str, cfg: dict):
+    inst = cfg["instruments"][name]
+    from nse_etf import yf_data
+    drivers = lru_cache(maxsize=1)(lambda: yf_data.get_drivers(cfg["drivers"]))
+    if inst["source"] == "mt5":
+        from xauusd import mt5_data
+        return (lambda tf: mt5_data.get_bars(inst["symbol"], tf, inst["bars"][tf])), drivers
+    return (lambda tf: yf_data.get_bars(inst["symbol"], tf, cfg["data_dir"])), drivers
+
+
+def show(results: list):
+    for r in results:
+        p = f"P(up)={r['p_up']:.1%}" if "p_up" in r else ""
+        print(f"{r['instrument']:10} {r['horizon']:>4}  {r['signal']:<5} {p:<12} {r.get('regime', ''):<9} {r['reason']}",
+              flush=True)
+
+
+def targets(cfg: dict, which: str) -> list:
+    if which != "all":
+        return [which]
+    return [k for k, v in cfg["instruments"].items() if v.get("enabled", True) and v["source"] != "mt5"]
+
+
+def run_command(command: str, name: str, cfg: dict, db):
+    raw_bars, get_drivers = providers(name, cfg)
+    get_bars = lru_cache(maxsize=None)(raw_bars)  # one download per timeframe per pass
+
+    if command == "train":
+        for hz, m in pipeline.train(name, cfg, get_bars, get_drivers, db).items():
+            print(f"[{name} {hz}] rows={m['rows']} auc={m.get('auc')} acc={m.get('accuracy')} "
+                  f"base={m.get('baseline_accuracy')} net={m.get('net_return_total')} "
+                  f"edge={m['has_edge']} :: {m['reason']}", flush=True)
+    elif command == "update":
+        pipeline.update(name, cfg, get_bars, db)
+    elif command in ("predict", "tick"):
+        if command == "tick":
+            pipeline.update(name, cfg, get_bars, db)
+        results = pipeline.predict(name, cfg, get_bars, get_drivers, db)
+        show(results)
+        try:
+            alerts.notify_new(db, cfg, results)
+        except Exception as e:  # alerts are optional and must never break prediction
+            print(f"alerts skipped: {e}", flush=True)
+        if command == "tick":
+            for tf in CHART_TFS:
+                try:
+                    store.save_candles(db, name, tf, get_bars(tf))
+                except Exception as e:  # the chart is a nicety; predictions already saved
+                    db.rollback()
+                    print(f"candles {name} {tf} skipped: {e}", flush=True)
+            store.beat(db, name)
+
+
+def main():
+    cfg = load_config()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("instrument", choices=["all", *cfg["instruments"]])
+    ap.add_argument("command", choices=["init-db", "train", "predict", "update", "tick", "loop"])
+    ap.add_argument("--every", type=int, default=120, help="loop interval in seconds")
+    a = ap.parse_args()
+
+    db = store.connect_cfg(cfg)
+    store.sync_instruments(db, cfg)
+    if a.command == "init-db":
+        print("database ready", flush=True)
+        return
+
+    names = targets(cfg, a.instrument)
+    failed = []
+    while True:
+        for name in names:
+            try:
+                run_command("tick" if a.command == "loop" else a.command, name, cfg, db)
+            except Exception as e:
+                db.rollback()
+                failed.append(name)
+                print(f"{name} failed: {type(e).__name__}: {e}", flush=True)
+        if a.command != "loop":
+            break
+        time.sleep(a.every)
+    if failed:  # make scheduled runs show red in GitHub so a broken instrument is noticed
+        raise SystemExit(f"failed: {', '.join(failed)}")
+
+
+if __name__ == "__main__":
+    main()

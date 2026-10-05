@@ -1,0 +1,221 @@
+"""Database layer. One code path for SQLite (local runs, tests) and Postgres (Neon in production).
+
+`connect("store/predictor.db")` -> SQLite file.   `connect("postgresql://...")` -> Postgres.
+SQL is written once with `?` placeholders and portable constructs (ON CONFLICT ... RETURNING); the Postgres side
+translates placeholders. Rows behave like dicts (`row["col"]`, `dict(row)`) on both.
+"""
+import io
+import json
+import os
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+
+import joblib
+
+_DDL = """
+CREATE TABLE IF NOT EXISTS predictions(
+  id {pk}, created TEXT, instrument TEXT, horizon TEXT, tf TEXT, steps INTEGER,
+  bar_ts TEXT, price {real}, atr {real}, p_up {real}, signal TEXT, regime TEXT, has_edge INTEGER,
+  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT,
+  UNIQUE(instrument, horizon, bar_ts)
+);
+CREATE TABLE IF NOT EXISTS shadow_trades(
+  id {pk}, prediction_id INTEGER, instrument TEXT, horizon TEXT, direction TEXT,
+  bar_ts TEXT, entry {real}, sl {real}, tp {real}, status TEXT, exit_ts TEXT, exit_price {real}, pnl_pct {real}
+);
+CREATE TABLE IF NOT EXISTS heartbeat(instrument TEXT PRIMARY KEY, ts TEXT);
+CREATE TABLE IF NOT EXISTS models(name TEXT PRIMARY KEY, blob {blob}, meta TEXT, updated TEXT);
+CREATE TABLE IF NOT EXISTS reports(instrument TEXT PRIMARY KEY, body TEXT, updated TEXT);
+CREATE TABLE IF NOT EXISTS candles(
+  instrument TEXT, tf TEXT, ts {big}, open {real}, high {real}, low {real}, close {real},
+  PRIMARY KEY(instrument, tf, ts)
+);
+CREATE TABLE IF NOT EXISTS instruments(id TEXT PRIMARY KEY, label TEXT, horizons TEXT, enabled INTEGER, sort INTEGER);
+CREATE TABLE IF NOT EXISTS user_settings(
+  email TEXT PRIMARY KEY, telegram_chat_id TEXT, telegram_on INTEGER DEFAULT 0, email_on INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pred_inst ON predictions(instrument, id);
+CREATE INDEX IF NOT EXISTS idx_trades_inst ON shadow_trades(instrument, status);
+"""
+
+_TYPES = {
+    "sqlite": {"pk": "INTEGER PRIMARY KEY", "real": "REAL", "blob": "BLOB", "big": "INTEGER"},
+    "postgres": {"pk": "BIGSERIAL PRIMARY KEY", "real": "DOUBLE PRECISION", "blob": "BYTEA", "big": "BIGINT"},
+}
+
+
+def _scalar(v):
+    """numpy scalars -> plain Python (psycopg cannot adapt numpy.float64)."""
+    return v.item() if hasattr(v, "item") and not isinstance(v, (bytes, bytearray, memoryview)) else v
+
+
+class Db:
+    def __init__(self, conn, kind: str):
+        self.conn, self.kind = conn, kind
+
+    def execute(self, sql: str, params=()):
+        params = tuple(_scalar(p) for p in params)
+        if self.kind == "postgres":
+            cur = self.conn.cursor()
+            cur.execute(sql.replace("?", "%s"), params)
+            return cur
+        return self.conn.execute(sql, params)
+
+    def commit(self):
+        self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
+
+    def close(self):
+        self.conn.close()
+
+
+def _is_postgres(target: str) -> bool:
+    return target.startswith(("postgres://", "postgresql://", "host="))
+
+
+def connect(target: str) -> Db:
+    """target: SQLite file path, or a Postgres URL / libpq DSN."""
+    if _is_postgres(target):
+        import psycopg
+        from psycopg.rows import dict_row
+
+        # prepare_threshold=None: Neon's pooled endpoint is PgBouncer in transaction mode, which cannot keep prepared
+        # statements; this is psycopg's documented setting for that. (Not exercised by the local tests.)
+        db = Db(psycopg.connect(target, row_factory=dict_row, prepare_threshold=None), "postgres")
+    else:
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        # check_same_thread=False: connections are never shared between concurrent users of this module
+        conn = sqlite3.connect(target, timeout=30, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        db = Db(conn, "sqlite")
+    ensure_schema(db)
+    return db
+
+
+def connect_cfg(cfg: dict) -> Db:
+    """DATABASE_URL (environment) wins over the local SQLite path in config.yaml."""
+    return connect(os.getenv("DATABASE_URL") or cfg["db_path"])
+
+
+def schema_sql(kind: str) -> str:
+    return _DDL.format(**_TYPES[kind]).strip() + "\n"
+
+
+def ensure_schema(db: Db):
+    for stmt in schema_sql(db.kind).split(";"):
+        if stmt.strip():
+            db.execute(stmt)
+    db.commit()
+
+
+def _json_safe(o):
+    if isinstance(o, float) and (o != o or o in (float("inf"), float("-inf"))):
+        return None
+    if isinstance(o, dict):
+        return {k: _json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_safe(v) for v in o]
+    return _scalar(o)
+
+
+def dumps(o) -> str:
+    """JSON that browsers can parse: NaN / Infinity become null."""
+    return json.dumps(_json_safe(o), allow_nan=False)
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# ---------- predictions / heartbeat ----------
+
+def log_prediction(db: Db, rec: dict):
+    """Insert a prediction; returns its id, or None if this bar was already predicted."""
+    cols = ["created", "instrument", "horizon", "tf", "steps", "bar_ts", "price", "atr", "p_up", "signal",
+            "regime", "has_edge", "model_version", "reason"]
+    row = db.execute(
+        f"INSERT INTO predictions({','.join(cols)}) VALUES({','.join('?' * len(cols))}) "
+        "ON CONFLICT(instrument, horizon, bar_ts) DO NOTHING RETURNING id",
+        [rec[c] for c in cols],
+    ).fetchone()
+    db.commit()
+    return row["id"] if row else None
+
+
+def beat(db: Db, instrument: str):
+    """Record that a pass just finished, so the app can tell 'market closed' from 'updater stopped'."""
+    db.execute("INSERT INTO heartbeat(instrument, ts) VALUES(?,?) ON CONFLICT(instrument) DO UPDATE SET ts=excluded.ts",
+               (instrument, now_iso()))
+    db.commit()
+
+
+# ---------- models and reports (kept in the database so any machine can train or predict) ----------
+
+def save_model(db: Db, name: str, model, meta: dict):
+    buf = io.BytesIO()
+    joblib.dump(model, buf)
+    db.execute(
+        "INSERT INTO models(name, blob, meta, updated) VALUES(?,?,?,?) "
+        "ON CONFLICT(name) DO UPDATE SET blob=excluded.blob, meta=excluded.meta, updated=excluded.updated",
+        (name, buf.getvalue(), dumps(meta), now_iso()),
+    )
+    db.commit()
+
+
+def load_model(db: Db, name: str):
+    """Returns {"model", "meta"} or None. The blob is a pickle: only ever load from a database you control."""
+    row = db.execute("SELECT blob, meta FROM models WHERE name=?", (name,)).fetchone()
+    if row is None:
+        return None
+    return {"model": joblib.load(io.BytesIO(bytes(row["blob"]))), "meta": json.loads(row["meta"])}
+
+
+def save_report(db: Db, instrument: str, report: dict):
+    db.execute(
+        "INSERT INTO reports(instrument, body, updated) VALUES(?,?,?) "
+        "ON CONFLICT(instrument) DO UPDATE SET body=excluded.body, updated=excluded.updated",
+        (instrument, dumps(report), now_iso()),
+    )
+    db.commit()
+
+
+def load_report(db: Db, instrument: str) -> dict:
+    row = db.execute("SELECT body FROM reports WHERE instrument=?", (instrument,)).fetchone()
+    return json.loads(row["body"]) if row else {}
+
+
+# ---------- data for the website ----------
+
+def save_candles(db: Db, instrument: str, tf: str, df, limit: int = 400, chunk: int = 200):
+    """Upsert the latest `limit` candles; times are epoch seconds of the exchange's local clock read as UTC."""
+    df = df[~df.index.duplicated(keep="last")].tail(limit)
+    t = df.index.tz_localize(None) if df.index.tz is not None else df.index
+    rows = [(instrument, tf, int(ts.timestamp()), float(o), float(h), float(lo), float(c))
+            for ts, o, h, lo, c in zip(t, df["open"], df["high"], df["low"], df["close"])]
+    for i in range(0, len(rows), chunk):
+        part = rows[i:i + chunk]
+        db.execute(
+            "INSERT INTO candles(instrument, tf, ts, open, high, low, close) VALUES "
+            + ",".join(["(?,?,?,?,?,?,?)"] * len(part))
+            + " ON CONFLICT(instrument, tf, ts) DO UPDATE SET open=excluded.open, high=excluded.high, "
+            "low=excluded.low, close=excluded.close",
+            [v for r in part for v in r],
+        )
+    db.commit()
+
+
+def sync_instruments(db: Db, cfg: dict):
+    """Publish instrument names and horizons so the website needs no copy of config.yaml."""
+    for i, (name, inst) in enumerate(cfg["instruments"].items()):
+        db.execute(
+            "INSERT INTO instruments(id, label, horizons, enabled, sort) VALUES(?,?,?,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET label=excluded.label, horizons=excluded.horizons, "
+            "enabled=excluded.enabled, sort=excluded.sort",
+            (name, inst.get("label", name), dumps([h["name"] for h in inst["horizons"]]),
+             int(inst.get("enabled", True)), i),
+        )
+    db.commit()

@@ -1,0 +1,7 @@
+# Local development: everything in requirements-ci.txt plus MetaTrader 5 (Windows only), the local dashboard and tests.
+-r requirements-ci.txt
+MetaTrader5; sys_platform == "win32"
+python-dotenv
+streamlit
+pytest
+py-pglite

@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/* Calm, document-like surface; brass accent used sparingly; BUY / SELL / WAIT each keep one fixed semantic hue. */
+:root {
+  --bg: #f3f4f1;
+  --surface: #ffffff;
+  --ink: #16221e;
+  --muted: #5b6862;
+  --line: #dde2dc;
+  --brass: #9a6b14;
+  --brass-soft: #f2e8d0;
+  --buy: #1b7f50;
+  --buy-soft: #dff1e7;
+  --sell: #b83f37;
+  --sell-soft: #f8e1de;
+  --wait: #4f6074;
+  --wait-soft: #e4e9ee;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1411;
+    --surface: #161f19;
+    --ink: #e7ede9;
+    --muted: #94a19a;
+    --line: #25322a;
+    --brass: #dcae50;
+    --brass-soft: #2b2415;
+    --buy: #55c98e;
+    --buy-soft: #14301f;
+    --sell: #f2796f;
+    --sell-soft: #3b1d1b;
+    --wait: #9eadbf;
+    --wait-soft: #1f2a35;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brass: var(--brass);
+  --color-brass-soft: var(--brass-soft);
+  --color-buy: var(--buy);
+  --color-buy-soft: var(--buy-soft);
+  --color-sell: var(--sell);
+  --color-sell-soft: var(--sell-soft);
+  --color-wait: var(--wait);
+  --color-wait-soft: var(--wait-soft);
+  --font-sans: var(--font-manrope), var(--font-bengali), system-ui, sans-serif;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-manrope), var(--font-bengali), system-ui, sans-serif;
+  line-height: 1.65;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+  line-height: 1.3;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

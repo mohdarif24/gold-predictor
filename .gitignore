@@ -1,0 +1,46 @@
+# secrets and local config: never commit
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.pem
+*.key
+
+# generated data, local databases, models, logs
+store/
+data/
+models/
+reports/
+logs/
+*.db
+*.db-wal
+*.db-shm
+*.parquet
+*.joblib
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+pglite_work/
+
+# node / next / cloudflare
+node_modules/
+.next/
+.open-next/
+.wrangler/
+out/
+coverage/
+next-env.d.ts
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+*.tsbuildinfo
