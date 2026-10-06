@@ -2,7 +2,7 @@
 
 Can a model tell whether gold will be higher or lower 30 minutes, 1 hour, 1 day or 1 week from now, well enough to trade on?
 
-I built a pipeline to test that honestly, with as many inputs and models as I could reasonably add, plus a website that shows the result in plain language. **Short answer from the data I have: no.** After adding technical indicators, 24 market and macro series, positioning data, calendar effects, news mood and eight model families, none of the eight series-and-horizon combinations beat plain guessing on a locked test set. The system is built so that this outcome is the default: a time window only shows Buy or Sell if it passes the tests, otherwise it says Wait. The site's "What moves gold" screen is still useful without a forecast, because it shows what the model looked at and how it did.
+I built a pipeline to test that honestly, with as many inputs and models as I could reasonably add, plus a website that shows the result in plain language. **Short answer from the data I have: no.** After adding technical indicators, 24 market and macro series (including real yields), positioning data, calendar effects, news mood and eight model families, none of the eight series-and-horizon combinations beat plain guessing on a locked test set. The system is built so that this outcome is the default: a time window only shows Buy or Sell if it passes the tests, otherwise it says Wait. The site's "What moves gold" screen is still useful without a forecast, because it shows what the model looked at and how it did.
 
 *Statistical research tool. Not financial advice. Results are as of 6 October 2026 and change as data grows.*
 
@@ -15,18 +15,18 @@ The last 20% of each series was locked away. One model and input set per row was
 
 | Series | Horizon | Chosen on older data | Hold-out bars | AUC (95% range) | Accuracy | Guess | Net return* | Buy & hold* | Long share | Verdict |
 |---|---|---|---:|---|---:|---:|---:|---:|---:|---|
-| Gold futures (GC=F) | 30 min | core + et | 2,769 | 0.463 (0.427 to 0.502) | 48.0% | 52.6% | -1.3% | -5.0% | 45% | no edge |
-|  | 1 hour | tech+ + lgbm | 2,768 | 0.492 (0.439 to 0.540) | 49.3% | 51.3% | -5.5% | -4.9% | 40% | no edge |
-|  | 1 day | tech+ + lgbm | 1,300 | 0.530 (0.499 to 0.561) | 54.0% | 54.1% | +24.6% | +92.4% | 68% | no edge |
-|  | 1 week | core + et | 1,299 | 0.486 (0.438 to 0.543) | 58.6% | 57.4% | +31.9% | +91.9% | 100% | no edge |
-| Gold ETF (GOLDBEES.NS) | 30 min | flow + lgbm | 285 | 0.510 (0.424 to 0.599) | 54.4% | 50.9% | -5.4% | -2.3% | 56% | no edge |
-|  | 1 hour | tech+ + lstm | 285 | 0.411 (0.328 to 0.535) | 45.3% | 40.4% | -4.1% | -2.0% | 42% | no edge |
-|  | 1 day | flow + xgb | 755 | 0.525 (0.481 to 0.559) | 52.6% | 55.0% | +35.8% | +95.9% | 64% | no edge |
-|  | 1 week | tech+ + rf | 754 | 0.507 (0.426 to 0.583) | 55.3% | 60.1% | +52.0% | +94.2% | 93% | no edge |
+| Gold futures (GC=F) | 30 min | core + et | 2,798 | 0.467 (0.425 to 0.503) | 49.1% | 52.5% | -1.1% | -4.7% | 53% | no edge |
+|  | 1 hour | tech+ + lgbm | 2,796 | 0.489 (0.439 to 0.538) | 49.8% | 50.8% | -4.0% | -4.8% | 42% | no edge |
+|  | 1 day | tech+ + lgbm | 1,300 | 0.529 (0.500 to 0.563) | 53.1% | 54.0% | +24.9% | +92.2% | 69% | no edge |
+|  | 1 week | core + et | 1,299 | 0.487 (0.440 to 0.540) | 58.5% | 57.4% | +10.7% | +91.3% | 100% | no edge |
+| Gold ETF (GOLDBEES.NS) | 30 min | tech+ + logit | 289 | 0.469 (0.385 to 0.578) | 48.8% | 51.6% | -3.6% | -3.6% | 53% | no edge |
+|  | 1 hour | tech+ + lstm | 289 | 0.425 (0.353 to 0.554) | 46.7% | 45.7% | -3.1% | -3.5% | 54% | no edge |
+|  | 1 day | all + et | 755 | 0.519 (0.462 to 0.548) | 54.8% | 55.0% | -1.2% | +95.9% | 100% | no edge |
+|  | 1 week | all + rf | 754 | 0.540 (0.467 to 0.615) | 53.8% | 60.1% | +58.7% | +94.2% | 86% | no edge |
 
 \* Sum of per-trade returns (not compounded) after costs; "Buy & hold" is the same sum for holding on every sampled bar, before costs. A trade is taken only when the model's probability is above 55% or below 45%. The input sets are explained under [Inputs](#inputs); `et` is extra-trees, `lgbm` LightGBM, `xgb` XGBoost, `rf` random forest.
 
-Every row fails the gate described under [Protocol](#protocol), so all eight are Wait. The closest cases are the futures at 1 day (AUC range 0.499 to 0.561, accuracy equal to guessing) and the ETF at 1 day.
+Every row fails the gate described under [Protocol](#protocol), so all eight are Wait. The closest cases are the futures at 1 day (AUC range 0.500 to 0.563, but accuracy below guessing) and the ETF at 1 week (AUC 0.540, range 0.467 to 0.615, accuracy six points below guessing).
 
 ## Inputs
 
@@ -58,10 +58,10 @@ Two tests guard the procedure itself: a pure random walk must never get an edge,
 
 ## Reading the numbers
 
-- **AUC** is 0.5 for guessing. Every hold-out range includes 0.5 or sits at its edge. Six of the eight point estimates are within 0.03 of 0.5. The other two are below it (0.463 for the futures at 30 minutes and 0.411 for the ETF at 1 hour, the latter on only 285 bars).
-- **The positive daily and weekly returns are not skill.** The models leaned long 64-100% of the time and gold rose strongly. Holding on every bar earned far more (for example +92.4% against +24.6% for the futures at 1 day).
-- **Confidence is not reliability.** The ETF's 1-hour model said it was at least 80% sure 72 times and was right in 36% of them. The 30-minute ETF model said it 6 times and was right in none. The futures' 1-hour model said it 4 times and was right each time, which is too few to mean anything. No model reached anything close to 80% accuracy overall.
-- **Keeping only the most confident calls did not fix it.** The top 10% scored between 25% and 61% depending on the row, on 29 to 277 cases each, with no consistent gain.
+- **AUC** is 0.5 for guessing. Every hold-out range includes 0.5 or sits at its edge. Four of the eight point estimates are within 0.03 of 0.5. Three are below it (0.467, 0.469 and 0.425, the last two on only 289 bars) and one is above (0.540 for the ETF at 1 week, with a range from 0.467 to 0.615).
+- **The positive daily and weekly returns are not skill.** The models leaned long 69-100% of the time and gold rose strongly. Holding on every bar earned far more (for example +92.2% against +24.9% for the futures at 1 day, and +95.9% against -1.2% for the ETF).
+- **Confidence is not reliability.** The ETF's 1-hour model said it was at least 80% sure 35 times and was right in 40% of them. The futures' 1-hour model said it 4 times and was right each time, which is too few to mean anything. The other six never said it. No model reached anything close to 80% accuracy overall.
+- **Keeping only the most confident calls did not fix it.** The top 10% scored between 24% and 72% depending on the row, on 29 to 280 cases each, with no consistent gain; the best-looking figures sit on the smallest samples.
 - **Intraday results are negative after costs.** Moves over 30 or 60 minutes are small next to the cost of trading them.
 - Probabilities from the saved models should not be trusted where the gate fails. The site shows what drove each reading, but a reading explained is not a reading proved.
 

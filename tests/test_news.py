@@ -80,8 +80,8 @@ def test_refresh_stores_each_headline_once_and_builds_daily_features(db):
     assert news.refresh_news(db, {"a": "x"}, fetch=fetch, pause=0) == 0  # nothing new the second time
     assert db.execute("SELECT COUNT(*) AS n FROM news").fetchone()["n"] == 3
     f = news.news_features(db)
-    assert list(f.index.astype(str)) == ["2026-10-05"] and f["news_count"].iloc[0] == 3
-    assert {"news_sent_mean", "news_sent_3d", "news_high_share"} <= set(f.columns)
+    assert list(f.index.astype(str)) == ["2026-10-05"]
+    assert set(f.columns) == {"news_sent_mean", "news_sent_3d", "news_high_share"}  # no headline count: it tracks the calendar
 
 
 def test_events_are_filtered_and_stored(db):

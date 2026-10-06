@@ -140,7 +140,6 @@ const BASE: Record<string, Text> = {
   x_tips_vs_nominal20: { en: "Real yields falling vs nominal", bn: "প্রকৃত সুদ কমছে নামমাত্র সুদের তুলনায়" },
   news_sent_mean: { en: "News mood today", bn: "আজকের খবরের হাওয়া" },
   news_sent_3d: { en: "News mood, last 3 days", bn: "খবরের হাওয়া, গত ৩ দিন" },
-  news_count: { en: "How many gold headlines", bn: "সোনার শিরোনামের সংখ্যা" },
   news_high_share: { en: "Share of high-impact headlines", bn: "বড়-প্রভাবের শিরোনামের অংশ" },
   cot_mm_net: { en: "Hedge funds' net bet on gold", bn: "হেজ ফান্ডের সোনায় নিট বাজি" },
   cot_pm_net: { en: "Producers' net hedge", bn: "উৎপাদকদের নিট সুরক্ষা-অবস্থান" },

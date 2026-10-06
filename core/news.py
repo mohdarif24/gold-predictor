@@ -252,15 +252,17 @@ def backfill_news(db, start, end, query: str = "gold price", fetch=fetch_google_
 
 
 def news_features(db) -> pd.DataFrame:
-    """Daily news mood from what has been collected so far, indexed by the day it covers.
-    History only exists from the day collection began, so models see these inputs as missing before then."""
+    """Daily news mood, indexed by the day it covers.
+
+    Only measures that do not depend on HOW MANY headlines exist are used. Google keeps far fewer old headlines than
+    recent ones (about 6 a day in 2016, about 38 in 2026), so a headline count would just tell the model what year it is."""
     rows = db.execute("SELECT published, sentiment, impact FROM news").fetchall()
     if not rows:
         return pd.DataFrame()
     d = pd.DataFrame([dict(r) for r in rows])
     d["day"] = pd.to_datetime(d["published"], utc=True).dt.tz_localize(None).dt.normalize()
     g = d.groupby("day")
-    f = pd.DataFrame({"news_sent_mean": g["sentiment"].mean(), "news_count": g["sentiment"].size(),
+    f = pd.DataFrame({"news_sent_mean": g["sentiment"].mean(),
                       "news_high_share": g["impact"].apply(lambda s: float((s == "high").mean()))})
     f["news_sent_3d"] = f["news_sent_mean"].rolling(3, min_periods=1).mean()
     f.index.name = "available"
