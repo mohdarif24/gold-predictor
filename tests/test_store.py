@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -103,3 +104,36 @@ def test_postgres_survives_reconnects_and_repeated_statements(pg_dsn):
         db.execute("DROP TABLE heartbeat")
         db.commit()
         db.close()
+
+
+def test_copy_between_databases_keeps_everything_and_the_id_counter(tmp_path, pg_dsn):
+    """Local SQLite -> Postgres (what moving to Neon does). Re-running must not duplicate, and new rows must get fresh ids."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("copy_db", Path(__file__).resolve().parents[1] / "scripts" / "copy_db.py")
+    copy_db = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(copy_db)
+    from core.models import fit
+    src = store.connect(str(tmp_path / "src.db"))
+    first = store.log_prediction(src, rec())
+    store.log_prediction(src, rec(bar_ts="2026-10-03 00:00:00+05:30"))
+    X = pd.DataFrame(np.random.default_rng(0).normal(size=(200, 3)), columns=list("abc"))
+    store.save_model(src, "m", fit(X, (X["a"] > 0).astype(float)), {"version": "v"})
+    store.save_research(src, "nse_etf", "1d", {"holdout": {"auc": 0.51}})
+    dst = store.connect(pg_dsn)
+    try:
+        out = copy_db.copy(src, dst, log=lambda *_: None)
+        assert out["predictions"] == (2, 2) and out["models"] == (1, 1) and out["research"] == (1, 1)
+        copy_db.copy(src, dst, log=lambda *_: None)                                       # second run: no duplicates
+        assert db_count(dst, "predictions") == 2
+        assert store.load_model(dst, "m")["model"].predict_proba(X).shape == (200, 2)    # the model survived the trip
+        new_id = store.log_prediction(dst, rec(bar_ts="2026-10-09 00:00:00+05:30"))
+        assert new_id > first + 1                                                          # the id counter moved past copied ids
+    finally:
+        for t in copy_db.TABLES:
+            dst.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
+        dst.commit()
+        dst.close()
+
+
+def db_count(db, table):
+    return db.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]
