@@ -26,7 +26,8 @@ export default function ChecklistPage() {
 
   const ups = card ? Object.values(card.now).filter((v) => v > 0).length : 0;
   const downs = card ? Object.values(card.now).filter((v) => v < 0).length : 0;
-  const dirWord = card?.direction === "up" ? t("chk.up") : t("chk.down");
+  const up = card?.direction === "up";
+  const words = { say: up ? t("chk.up") : t("chk.down"), where: t(up ? "chk.where.up" : "chk.where.down"), side: t(up ? "chk.side.up" : "chk.side.down") };
   const baseDir = p ? (card?.direction === "up" ? p.base_up.rate : p.base_up.rate == null ? null : 1 - p.base_up.rate) : null;
   const total = p?.total;
   const better = total?.lo != null && baseDir != null && total.lo > baseDir;
@@ -113,12 +114,12 @@ export default function ChecklistPage() {
                 <p className="mt-2 text-muted">{t("chk.total.none")}</p>
               ) : (
                 <>
-                  <p className="mt-1 text-sm">{t("chk.total.lean", { up: ups, down: downs, dir: dirWord, k: Math.abs(card.net) })}</p>
+                  <p className="mt-1 text-sm">{t("chk.total.lean", { up: ups, down: downs, side: words.side, k: Math.abs(card.net) })}</p>
                   <div className={`mt-3 text-5xl font-bold tabular-nums ${card.direction === "up" ? "text-buy" : "text-sell"}`}>{num(pct(total.rate, 0))}</div>
                   <p className="mt-2 text-sm">
-                    {t("chk.total.body", { k: Math.abs(card.net), dir: dirWord, pct: pct(total.rate, 0), n: total.n.toLocaleString("en-US"), lo: pct(total.lo, 0), hi: pct(total.hi, 0) })}
+                    {t("chk.total.body", { k: Math.abs(card.net), say: words.say, where: words.where, pct: pct(total.rate, 0), n: total.n.toLocaleString("en-US"), lo: pct(total.lo, 0), hi: pct(total.hi, 0) })}
                   </p>
-                  <p className="text-sm text-muted">{t("chk.total.anyway", { dir: dirWord, pct: pct(baseDir, 1) })}</p>
+                  <p className="text-sm text-muted">{t("chk.total.anyway", { where: words.where, pct: pct(baseDir, 1) })}</p>
                 </>
               )}
             </div>
