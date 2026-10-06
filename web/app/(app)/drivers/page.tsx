@@ -42,8 +42,10 @@ function PushBar({ label, hint, share, push }: { label: string; hint?: string; s
   );
 }
 
-const move = (x: number | null, num: (s: string) => string) =>
-  x === null ? <span className="text-muted">-</span> : <span className={x >= 0 ? "text-buy" : "text-sell"}>{num(`${x >= 0 ? "+" : ""}${(x * 100).toFixed(2)}%`)}</span>;
+const move = (x: number | null | undefined, num: (s: string) => string, points = false) =>
+  x == null ? <span className="text-muted">-</span> : (
+    <span className={x >= 0 ? "text-buy" : "text-sell"}>{num(points ? `${x >= 0 ? "+" : ""}${x.toFixed(2)} pt` : `${x >= 0 ? "+" : ""}${(x * 100).toFixed(2)}%`)}</span>
+  );
 
 export default function DriversPage() {
   const { t, lang, num } = useT();
@@ -215,7 +217,7 @@ export default function DriversPage() {
                       <details key={x.key} className="rounded-lg border border-line p-3">
                         <summary className="flex flex-wrap items-baseline justify-between gap-x-3">
                           <span className="font-medium">{DRIVERS[x.key].label[lang]}</span>
-                          <span className="tabular-nums text-sm">{num(price(x.last))} · {move(x.chg1, num)} · {move(x.chg5, num)} · {move(x.chg20, num)}</span>
+                          <span className="tabular-nums text-sm">{num(price(x.last))} · {move(DRIVERS[x.key].level ? x.d1 : x.chg1, num, DRIVERS[x.key].level)} · {move(DRIVERS[x.key].level ? x.d5 : x.chg5, num, DRIVERS[x.key].level)} · {move(DRIVERS[x.key].level ? x.d20 : x.chg20, num, DRIVERS[x.key].level)}</span>
                         </summary>
                         <p className="mt-2 text-xs text-muted">{t("drv.now.d1")} · {t("drv.now.d5")} · {t("drv.now.d20")}</p>
                         <p className="mt-1 text-sm"><strong>{t("drv.now.why")}:</strong> {DRIVERS[x.key].why[lang]}</p>

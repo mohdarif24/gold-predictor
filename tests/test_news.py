@@ -105,3 +105,28 @@ def test_llm_is_off_unless_a_key_is_set_and_blank_ci_values_use_defaults(monkeyp
     monkeypatch.setenv("LLM_MODEL", "")
     cfg = news.llm_config()
     assert cfg["url"].startswith("https://models.github.ai") and cfg["model"] == "openai/gpt-4o-mini"
+
+
+def test_backfill_is_resumable_and_stops_politely_on_repeated_failures(db):
+    calls = []
+
+    def fetch(query, day):
+        calls.append(day)
+        if day == "2026-01-03" and len([c for c in calls if c == day]) <= 5:
+            raise RuntimeError("429 too many requests")
+        return [{"id": f"id-{day}", "published": f"{day}T08:00:00+00:00", "source": "s", "title": f"Gold falls {day}", "url": f"https://x/{day}"}]
+
+    out = news.backfill_news(db, "2026-01-01", "2026-01-05", fetch=fetch, pause=0, max_failures=3, log=lambda *_: None, newest_first=False)
+    assert out["finished_days"] == 2 and out["stopped_at"] == "2026-01-03" and out["remaining"] == 3
+    again = news.backfill_news(db, "2026-01-01", "2026-01-05", fetch=fetch, pause=0, max_failures=9, log=lambda *_: None, newest_first=False)
+    assert again["stopped_at"] is None and again["finished_days"] == 3        # only the unfinished days are fetched
+    assert calls.count("2026-01-01") == 1 and calls.count("2026-01-02") == 1
+    assert db.execute("SELECT COUNT(*) AS n FROM news").fetchone()["n"] == 5
+    assert set(news.news_features(db).index.strftime("%Y-%m-%d")) == {f"2026-01-0{d}" for d in range(1, 6)}
+    assert db.execute("SELECT scorer FROM news LIMIT 1").fetchone()["scorer"] == "rules"
+
+
+def test_backfill_defaults_to_newest_first(db):
+    order = []
+    news.backfill_news(db, "2026-01-01", "2026-01-03", fetch=lambda q, d: order.append(d) or [], pause=0, log=lambda *_: None)
+    assert order == ["2026-01-03", "2026-01-02", "2026-01-01"]

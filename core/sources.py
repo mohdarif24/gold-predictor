@@ -117,3 +117,43 @@ def calendar_features(index: pd.DatetimeIndex) -> pd.DataFrame:
     prev = np.clip(prev, 0, len(hol) - 1)
     f["cal_days_since_holiday"] = (day.values - hol.values[prev]).astype("timedelta64[D]").astype(int)
     return f
+
+
+# ------------------------------------------------------------------------------------------------ FRED (free, no key)
+FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+
+
+def _fred_fetch(series_id: str, client=None) -> pd.DataFrame:
+    import httpx
+
+    get = client.get if client is not None else httpx.get
+    r = get(FRED_URL, params={"id": series_id, "cosd": "2006-01-01"}, timeout=40, headers={"User-Agent": "gold-predictor/1.0"})
+    r.raise_for_status()
+    df = pd.read_csv(io.StringIO(r.text))
+    df.columns = ["date", "v"]
+    df["v"] = pd.to_numeric(df["v"], errors="coerce")
+    return df.dropna()
+
+
+def load_fred(series: dict, data_dir: str = "data", client=None) -> dict:
+    """US macro series from FRED's public CSV endpoint (no key). `series` is {name: {"id": "DFII10", "lag": 2}}.
+
+    FRED publishes a day's value a business day or more later, so each value is moved forward by `lag` days:
+    the series is indexed by the day it was actually usable, which keeps tests honest. If a download fails the
+    cached copy is used, and a series with neither is simply left out."""
+    cache = Path(data_dir) / "fred"
+    cache.mkdir(parents=True, exist_ok=True)
+    out = {}
+    for name, spec in (series or {}).items():
+        f = cache / f"{spec['id']}.parquet"
+        try:
+            df = _fred_fetch(spec["id"], client)
+            df.to_parquet(f)
+        except Exception as e:
+            if not f.exists():
+                print(f"warning: FRED {spec['id']} unavailable: {type(e).__name__}", flush=True)
+                continue
+            df = pd.read_parquet(f)
+        s = pd.Series(df["v"].values, index=pd.to_datetime(df["date"]) + pd.Timedelta(days=int(spec.get("lag", 2))), name=name)
+        out[name] = s[~s.index.duplicated(keep="last")].sort_index()
+    return out

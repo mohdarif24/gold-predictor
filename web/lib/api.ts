@@ -137,7 +137,7 @@ export type DriversHorizon = {
 export type DriversResponse = {
   instrument: string;
   horizons: DriversHorizon[];
-  drivers: { key: string; last: number; asof: string; chg1: number | null; chg5: number | null; chg20: number | null }[];
+  drivers: { key: string; last: number; asof: string; chg1: number | null; chg5: number | null; chg20: number | null; d1: number | null; d5: number | null; d20: number | null }[];
   positioning: { speculators_net: number; hedgers_net: number | null; rank3y: number | null; asof: string } | null;
 };
 

@@ -21,6 +21,7 @@ import pandas as pd
 import yaml
 from sklearn.metrics import roc_auc_score
 
+from core import news as news_mod
 from core import pipeline, store
 from core.backtest import evaluate, walk_forward
 from core.features import FEATURE_SETS, make_target, select_columns
@@ -177,11 +178,13 @@ def main():
         raw_bars, get_drivers = runner.providers(name, cfg)
         get_bars = lru_cache(maxsize=None)(raw_bars)
         cot = pipeline.load_cot(cfg)
+        news_f = news_mod.news_features(db)  # daily news mood collected or backfilled so far
+        print(f"inputs: positioning={'yes' if cot is not None else 'no'}, news days={len(news_f)}, market series={len(get_drivers())}", flush=True)
         for hz in inst["horizons"]:
             if a.horizons and hz["name"] not in a.horizons.split(","):
                 continue
             print(f"\n== {name} {hz['name']}", flush=True)
-            df, X = pipeline._features(inst, hz["tf"], get_bars, get_drivers, cot)
+            df, X = pipeline._features(inst, hz["tf"], get_bars, get_drivers, cot, news_f)
             y, fwd = make_target(df, hz["steps"])
             ok = y.notna() & X[pipeline._core_cols(X)].notna().all(axis=1)
             res = study_horizon(name, cfg, inst, hz, df, X[ok], y[ok], fwd[ok], models)

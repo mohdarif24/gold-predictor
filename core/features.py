@@ -12,6 +12,8 @@ from .sources import calendar_features
 
 _MACRO = re.compile(r"(_ret1|_ret5|_ret20|_lvlz)$|^x_")
 TECH_EXTRA = ("bb_", "stoch_", "adx", "di_", "cci", "pat_", "skew", "kurt", "gap", "dist_", "obv_")
+# rates and spreads: a change is measured in percentage points (a % change of a near-zero real yield would explode)
+LEVEL_DRIVERS = {"us3m", "us5y", "us10y", "us30y", "real_yield", "breakeven", "fwd_infl_5y5y", "fed_funds", "curve_2s10s"}
 GROUPS = ("technical", "technical_extra", "macro", "positioning", "calendar", "news")
 
 
@@ -165,7 +167,7 @@ def build_features(df: pd.DataFrame, tf: str, htf: dict | None = None, drivers: 
 
         for name in D.columns:
             for n in (1, 5, 20):
-                f[f"{name}_ret{n}"] = lagged(D[name].pct_change(n))
+                f[f"{name}_ret{n}"] = lagged(D[name].diff(n) if name in LEVEL_DRIVERS else D[name].pct_change(n))
             f[f"{name}_lvlz"] = lagged(lvlz(D[name]))
         have = set(D.columns)
         if {"global_gold", "silver"} <= have:

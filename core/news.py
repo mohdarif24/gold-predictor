@@ -177,6 +177,24 @@ def score_articles(items: list) -> list:
 
 
 # ------------------------------------------------------------------------------------------------------ storing
+def store_articles(db, items: list, use_llm: bool = True) -> int:
+    """Score and store articles not seen before. Returns how many were new."""
+    if not items:
+        return 0
+    have = {r["id"] for r in db.execute("SELECT id FROM news WHERE id IN (%s)" % ",".join("?" * len(items)),
+                                         [a["id"] for a in items]).fetchall()}
+    fresh = [a for a in items if a["id"] not in have]
+    scored = score_articles(fresh) if use_llm else [{**a, **score_rules(a["title"])} for a in fresh]
+    for a in scored:
+        db.execute(
+            "INSERT INTO news(id, published, source, title, url, topic, sentiment, impact, summary, scorer) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
+            (a["id"], a["published"], a["source"], a["title"], a["url"], a["topic"], a["sentiment"], a["impact"],
+             a["summary"], a["scorer"]))
+    db.commit()
+    return len(fresh)
+
+
 def refresh_news(db, queries: dict | None = None, fetch=fetch_google_news, pause: float = 1.0) -> int:
     """Fetch, score and store new headlines. Returns how many were new."""
     seen, items = set(), []
@@ -189,19 +207,48 @@ def refresh_news(db, queries: dict | None = None, fetch=fetch_google_news, pause
         except Exception as e:
             print(f"news query {q!r} skipped: {type(e).__name__}: {str(e)[:80]}", flush=True)
         time.sleep(pause)
-    if not items:
-        return 0
-    have = {r["id"] for r in db.execute("SELECT id FROM news WHERE id IN (%s)" % ",".join("?" * len(items)),
-                                         [a["id"] for a in items]).fetchall()}
-    fresh = [a for a in items if a["id"] not in have]
-    for a in score_articles(fresh):
-        db.execute(
-            "INSERT INTO news(id, published, source, title, url, topic, sentiment, impact, summary, scorer) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
-            (a["id"], a["published"], a["source"], a["title"], a["url"], a["topic"], a["sentiment"], a["impact"],
-             a["summary"], a["scorer"]))
-    db.commit()
-    return len(fresh)
+    return store_articles(db, items)
+
+
+def fetch_google_day(query: str, day) -> list:
+    """Headlines published on one calendar day (Google News supports after:/before: operators)."""
+    nxt = (pd.Timestamp(day) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    q = urllib.parse.quote(f"{query} after:{pd.Timestamp(day):%Y-%m-%d} before:{nxt}")
+    return parse_google_rss(_get(f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"))
+
+
+def backfill_news(db, start, end, query: str = "gold price", fetch=fetch_google_day, pause: float = 1.0,
+                  max_failures: int = 5, log=print, newest_first: bool = True) -> dict:
+    """Build a history of daily headlines so news mood can be tested as a model input like any other input.
+
+    Resumable: each finished day is recorded, so a stopped run continues where it left off. Uses the keyword rules
+    (never an AI model: thousands of calls). Stops politely after repeated failures, such as Google rate limiting."""
+    marker = f"backfill:{query}"
+    done = {r["ts"] for r in db.execute("SELECT ts FROM series WHERE name=?", (marker,)).fetchall()}
+    days = [d.strftime("%Y-%m-%d") for d in pd.date_range(start, end, freq="D") if d.strftime("%Y-%m-%d") not in done]
+    if newest_first:  # the recent years matter most, so a run that is stopped early still leaves useful data
+        days.reverse()
+    new = finished = 0
+    for day in days:
+        items = None
+        for attempt in range(1, max_failures + 1):  # retry the same day, with growing pauses
+            try:
+                items = fetch(query, day)
+                break
+            except Exception as e:
+                log(f"  {day}: {type(e).__name__}: {str(e)[:60]} (attempt {attempt}/{max_failures})")
+                time.sleep(min(pause * 10 * attempt, 90))
+        if items is None:  # still failing (for example rate limited): stop, a later run resumes here
+            return {"finished_days": finished, "new_articles": new, "stopped_at": day, "remaining": len(days) - finished}
+        new += store_articles(db, items, use_llm=False)
+        db.execute("INSERT INTO series(name, ts, value) VALUES(?,?,?) ON CONFLICT(name, ts) DO UPDATE SET value=excluded.value",
+                   (marker, day, float(len(items))))
+        db.commit()
+        finished += 1
+        if finished % 50 == 0:
+            log(f"  {day}: {finished} days done, {new} articles")
+        time.sleep(pause)
+    return {"finished_days": finished, "new_articles": new, "stopped_at": None, "remaining": 0}
 
 
 def news_features(db) -> pd.DataFrame:

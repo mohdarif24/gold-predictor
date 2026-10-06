@@ -153,6 +153,10 @@ export async function getPerformance(run: Run, name: string) {
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** Percentage change between the last value and the value `back` observations earlier. */
+function diff(values: number[], back: number): number | null {
+  return values.length > back ? values[values.length - 1] - values[values.length - 1 - back] : null;
+}
+
 function change(values: number[], back: number): number | null {
   if (values.length <= back) return null;
   const old = values[values.length - 1 - back];
@@ -210,7 +214,7 @@ export async function getDrivers(run: Run, name: string) {
     .filter(([n]) => n.startsWith("driver:"))
     .map(([n, pts]) => {
       const v = pts.map((p) => p.value);
-      return { key: n.slice(7), last: v[v.length - 1], asof: pts[pts.length - 1].ts, chg1: change(v, 1), chg5: change(v, 5), chg20: change(v, 20) };
+      return { key: n.slice(7), last: v[v.length - 1], asof: pts[pts.length - 1].ts, chg1: change(v, 1), chg5: change(v, 5), chg20: change(v, 20), d1: diff(v, 1), d5: diff(v, 5), d20: diff(v, 20) };
     });
   const cot = (n: string) => byName.get(n)?.at(-1);
   const positioning = cot("cot_mm_net")

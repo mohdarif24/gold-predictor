@@ -30,7 +30,8 @@ def load_config(path: str = "config.yaml") -> dict:
 def providers(name: str, cfg: dict):
     inst = cfg["instruments"][name]
     from nse_etf import yf_data
-    drivers = lru_cache(maxsize=1)(lambda: yf_data.get_drivers(cfg["drivers"]))
+    from core import sources
+    drivers = lru_cache(maxsize=1)(lambda: {**yf_data.get_drivers(cfg["drivers"]), **sources.load_fred(cfg.get("fred"), cfg["data_dir"])})
     if inst["source"] == "mt5":
         from xauusd import mt5_data
         return (lambda tf: mt5_data.get_bars(inst["symbol"], tf, inst["bars"][tf])), drivers

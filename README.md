@@ -2,7 +2,7 @@
 
 Can a model tell whether gold will be higher or lower 30 minutes, 1 hour, 1 day or 1 week from now, well enough to trade on?
 
-I built a pipeline to test that honestly, with as many inputs and models as I could reasonably add, plus a website that shows the result in plain language. **Short answer from the data I have: no.** After adding technical indicators, 18 market series, positioning data, calendar effects and eight model families, none of the eight series-and-horizon combinations beat plain guessing on a locked test set. The system is built so that this outcome is the default: a time window only shows Buy or Sell if it passes the tests, otherwise it says Wait. The site's "What moves gold" screen is still useful without a forecast, because it shows what the model looked at and how it did.
+I built a pipeline to test that honestly, with as many inputs and models as I could reasonably add, plus a website that shows the result in plain language. **Short answer from the data I have: no.** After adding technical indicators, 24 market and macro series, positioning data, calendar effects, news mood and eight model families, none of the eight series-and-horizon combinations beat plain guessing on a locked test set. The system is built so that this outcome is the default: a time window only shows Buy or Sell if it passes the tests, otherwise it says Wait. The site's "What moves gold" screen is still useful without a forecast, because it shows what the model looked at and how it did.
 
 *Statistical research tool. Not financial advice. Results are as of 6 October 2026 and change as data grows.*
 
@@ -35,11 +35,12 @@ Every row fails the gate described under [Protocol](#protocol), so all eight are
 | Price behaviour | returns, volatility, ATR, RSI, MACD, moving-average gaps, position in the 20-bar range, candle size, time of day, higher-timeframe trend, a rule-based market regime | the price series |
 | Chart indicators | Bollinger bands, stochastic, ADX and directional index, CCI, skew and kurtosis of returns, opening gap, distance from the 1-year high and low, volume trend, five candle patterns | the price series |
 | Dollar, rates and markets | dollar index, USD/INR, EUR/USD, USD/JPY, USD/CNY, US 3-month, 5-year, 10-year and 30-year yields, inflation-protected and long bonds, silver, copper, gold miners, VIX, S&P 500, oil, plus ratios and yield-curve slopes | Yahoo Finance (`yfinance`), lagged one day |
+| Real yields and inflation | US 10-year real yield, 10-year and 5y5y inflation expectations, Fed policy rate, 2s10s yield curve, broad trade-weighted dollar | FRED public CSV (no key), lagged two to three days because they are published late |
 | Big investors' positions | hedge funds' and producers' net position in gold futures, its 4-week change and its 3-year percentile | CFTC weekly report, treated as known from the Saturday after the Tuesday it describes |
 | Calendar | days to the US jobs report, options expiry, month and quarter end, holidays, season of the year | computed |
-| News mood | tone of recent gold and economy headlines | Google News RSS, read by keyword rules or an optional AI model |
+| News mood | daily tone of gold headlines: average, 3-day average, count, share of high-impact items | Google News RSS, read by keyword rules (or an optional AI model for live headlines); history rebuilt from 2016 with date-restricted searches (`scripts/backfill_news.py`) |
 
-News and the economic calendar are shown on the site, and the news mood becomes a model input only after months of history exist, because it cannot be reconstructed for the past. Until then models see it as missing. Every input carries the date it became public, and a test checks that features never see later rows.
+News and the economic calendar are also shown on the site. The news history is rebuilt by date-restricted searches, so it reflects headlines Google still indexes, which is a limitation. Every input carries the date it became public, and tests check that features never see later rows.
 
 ## Models
 

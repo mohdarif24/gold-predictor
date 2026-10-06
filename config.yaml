@@ -75,3 +75,12 @@ drivers:
   vix: "^VIX"
   spx: "^GSPC"
   oil: "CL=F"
+
+# US macro series from FRED's public CSV endpoint (no key). lag = days until the value is usable (published later).
+fred:
+  real_yield:    {id: DFII10,   lag: 2}   # 10-year inflation-adjusted yield: the single most-watched driver of gold
+  breakeven:     {id: T10YIE,   lag: 2}   # 10-year inflation expectation
+  fwd_infl_5y5y: {id: T5YIFR,   lag: 2}   # inflation expected 5 to 10 years ahead
+  fed_funds:     {id: DFF,      lag: 2}   # the Fed's policy rate
+  curve_2s10s:   {id: T10Y2Y,   lag: 2}   # 10-year minus 2-year yield (recession signal)
+  usd_broad:     {id: DTWEXBGS, lag: 3}   # trade-weighted dollar against many currencies
