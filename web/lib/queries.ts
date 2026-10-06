@@ -260,7 +260,118 @@ export async function emailForCode(run: Run, codeHash: string, now: Date = new D
 }
 
 export async function hasAccessCode(run: Run, email: string): Promise<boolean> {
-  return (await run("SELECT 1 FROM access_codes WHERE email = $1", [email])).length > 0;
+  return (await roleOf(run, email)) !== null;
+}
+
+/** "admin", "user", or null when the person has no (or a revoked) access code. */
+export async function roleOf(run: Run, email: string): Promise<"admin" | "user" | null> {
+  const rows = await run<{ role: string | null }>("SELECT role FROM access_codes WHERE email = $1", [email]);
+  if (!rows.length) return null;
+  return rows[0].role === "admin" ? "admin" : "user";
+}
+
+const MIN_CASES = 30; // below this, a measured rate is too noisy to show to clients
+
+type Bin = { pred: number; actual: number; n: number };
+
+/**
+ * The plain signal clients see: the chance gold ends higher or lower, measured from what actually happened in similar
+ * past situations. Daily horizons use the factor checklist; intraday horizons use the model's hold-out calibration
+ * (its raw probability is mapped to how often that probability came true). Never the model's own unchecked number.
+ */
+export async function getPublicSignal(run: Run, name: string) {
+  const inst = await requireInstrument(run, name);
+  const [cards, research, preds] = await Promise.all([
+    run<{ horizon: string; body: string }>("SELECT horizon, body FROM scorecards WHERE instrument = $1", [name]),
+    run<{ horizon: string; body: string }>("SELECT horizon, body FROM research WHERE instrument = $1", [name]),
+    run<{ horizon: string; p_up: number; created: string }>(
+      "SELECT horizon, p_up, created FROM predictions WHERE id IN (SELECT MAX(id) FROM predictions WHERE instrument = $1 GROUP BY horizon)",
+      [name],
+    ),
+  ]);
+  const card = new Map(cards.map((r) => [r.horizon, JSON.parse(r.body)]));
+  const study = new Map(research.map((r) => [r.horizon, JSON.parse(r.body)]));
+  const pred = new Map(preds.map((r) => [r.horizon, r]));
+
+  const horizons = inst.horizons.map((h) => {
+    const c = card.get(h);
+    if (c) {
+      const p = c.full;
+      const base: number = p.base_up.rate ?? 0.5;
+      let up = base;
+      let n = p.base_up.n as number;
+      if (c.direction !== "none" && p.total.rate != null && p.total.n >= MIN_CASES) {
+        up = c.direction === "up" ? p.total.rate : 1 - p.total.rate;
+        n = p.total.n;
+      }
+      return { horizon: h, p_up: up, source: "checklist", cases: n, as_of: c.as_of as string };
+    }
+    const bins: Bin[] = study.get(h)?.holdout?.calibration ?? [];
+    const latest = pred.get(h);
+    const total = bins.reduce((s, b) => s + b.n, 0);
+    const base = total ? bins.reduce((s, b) => s + b.actual * b.n, 0) / total : 0.5;
+    if (!latest || !bins.length) return { horizon: h, p_up: base, source: "base_rate", cases: total, as_of: latest?.created ?? null };
+    const near = bins.reduce((a, b) => (Math.abs(b.pred - latest.p_up) < Math.abs(a.pred - latest.p_up) ? b : a));
+    const up = near.n >= MIN_CASES ? near.actual : base;
+    return { horizon: h, p_up: up, source: near.n >= MIN_CASES ? "model_calibrated" : "base_rate", cases: near.n >= MIN_CASES ? near.n : total, as_of: latest.created };
+  });
+  return {
+    instrument: name,
+    label: inst.label,
+    signals: horizons.map((x) => ({ ...x, p_up: Math.round(Math.min(0.95, Math.max(0.05, x.p_up)) * 100) / 100, p_down: Math.round((1 - Math.min(0.95, Math.max(0.05, x.p_up))) * 100) / 100 })),
+  };
+}
+
+export const LOG_PERIODS = ["day", "week", "month", "year"] as const;
+export type LogPeriod = (typeof LOG_PERIODS)[number];
+const BUCKET: Record<LogPeriod, string> = {
+  day: "left(created, 10)",
+  week: "to_char(date_trunc('week', left(created, 10)::date), 'YYYY-MM-DD')", // the Monday the week starts on
+  month: "left(created, 7)",
+  year: "left(created, 4)",
+};
+// What the reading said: the chance clients were shown, or the model's own number for readings logged before that was
+// kept. 47-53% is shown to clients as "no clear direction", so it is neither right nor wrong.
+const SAID = "COALESCE(shown_p_up, p_up)";
+const STATUS =
+  `CASE WHEN ROUND(${SAID} * 100) BETWEEN 47 AND 53 THEN 'nocall' WHEN outcome_up IS NULL THEN 'pending' ` +
+  `WHEN (${SAID} > 0.5) = (outcome_up = 1) THEN 'right' ELSE 'wrong' END`;
+
+/**
+ * Every reading with whether it came true, and right / wrong counts per day, week, month or year. Optionally one horizon
+ * and one status. Counts cover every reading; the list shows the newest `limit`.
+ */
+export async function getPredictionLog(
+  run: Run, name: string, opts: { horizon?: string | null; period?: string | null; status?: string | null; limit?: number } = {},
+) {
+  const inst = await requireInstrument(run, name);
+  const horizon = opts.horizon && inst.horizons.includes(opts.horizon) ? opts.horizon : null;
+  const period: LogPeriod = LOG_PERIODS.includes(opts.period as LogPeriod) ? (opts.period as LogPeriod) : "day";
+  const status = ["right", "wrong", "pending", "nocall"].includes(opts.status ?? "") ? opts.status! : null;
+  const n = Math.max(1, Math.min(Number.isFinite(opts.limit) ? opts.limit! : 100, 500));
+  const base = `FROM predictions WHERE instrument = $1 AND ($2::text IS NULL OR horizon = $2)`;
+  const counts =
+    "COUNT(*) FILTER (WHERE s = 'right')::int AS right_n, COUNT(*) FILTER (WHERE s = 'wrong')::int AS wrong_n, " +
+    "COUNT(*) FILTER (WHERE s = 'pending')::int AS pending_n, COUNT(*) FILTER (WHERE s = 'nocall')::int AS nocall_n";
+  const [rows, buckets, total] = await Promise.all([
+    run(
+      `SELECT * FROM (SELECT id::int AS id, created, horizon, bar_ts, price, p_up, shown_p_up, ${SAID} AS said, signal, regime, ` +
+        `has_edge, outcome_up, outcome_price, resolved_ts, ${STATUS} AS status ${base}) x ` +
+        `WHERE ($3::text IS NULL OR status = $3) ORDER BY id DESC LIMIT $4`,
+      [name, horizon, status, n],
+    ),
+    run(`SELECT k AS period, ${counts} FROM (SELECT ${BUCKET[period]} AS k, ${STATUS} AS s ${base}) x GROUP BY k ORDER BY k DESC LIMIT 60`, [name, horizon]),
+    run<Record<string, number>>(`SELECT ${counts} FROM (SELECT ${STATUS} AS s ${base}) x`, [name, horizon]),
+  ]);
+  const shape = (r: Record<string, unknown>) => {
+    const right = Number(r.right_n), wrong = Number(r.wrong_n);
+    return { right, wrong, pending: Number(r.pending_n), nocall: Number(r.nocall_n), accuracy: right + wrong ? right / (right + wrong) : null };
+  };
+  return {
+    instrument: name, horizon, period, rows,
+    buckets: buckets.map((b) => ({ period: b.period as string, ...shape(b) })),
+    total: shape(total[0] ?? {}),
+  };
 }
 
 /** The factor checklist per daily horizon, with the model's own tested accuracy next to it. */

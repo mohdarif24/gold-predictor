@@ -63,7 +63,8 @@ def resolve_predictions(conn, instrument: str, get_bars):
         i0 = _pos(bars, r["bar_ts"])
         if i0 is None or i0 + r["steps"] >= len(bars):
             continue
-        up = int(bars["close"].iloc[i0 + r["steps"]] > bars["close"].iloc[i0])
-        conn.execute("UPDATE predictions SET outcome_up=?, resolved_ts=? WHERE id=?",
-                     (up, str(bars.index[i0 + r["steps"]]), r["id"]))
+        later = float(bars["close"].iloc[i0 + r["steps"]])
+        up = int(later > bars["close"].iloc[i0])
+        conn.execute("UPDATE predictions SET outcome_up=?, resolved_ts=?, outcome_price=? WHERE id=?",
+                     (up, str(bars.index[i0 + r["steps"]]), later, r["id"]))
     conn.commit()

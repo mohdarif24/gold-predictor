@@ -1,4 +1,5 @@
 "use client";
+import { AdminOnly } from "@/components/AdminOnly";
 import { useState } from "react";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Card, PageTitle, Skeleton } from "@/components/ui";
@@ -10,7 +11,7 @@ import { FACTORS, MODEL_NAMES } from "@/lib/labels";
 
 const CHIP = { 1: "bg-buy-soft text-buy", [-1]: "bg-sell-soft text-sell", 0: "bg-wait-soft text-wait" } as Record<number, string>;
 
-export default function ChecklistPage() {
+function ChecklistPageInner() {
   const { t, lang, num } = useT();
   const { current } = useInstrument();
   const res = useApi<ChecklistResponse>(current ? `checklist/${current.id}` : null, 300_000);
@@ -128,5 +129,13 @@ export default function ChecklistPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+export default function ChecklistPage() {
+  return (
+    <AdminOnly>
+      <ChecklistPageInner />
+    </AdminOnly>
   );
 }

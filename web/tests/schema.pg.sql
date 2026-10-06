@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS predictions(
   id BIGSERIAL PRIMARY KEY, created TEXT, instrument TEXT, horizon TEXT, tf TEXT, steps INTEGER,
   bar_ts TEXT, price DOUBLE PRECISION, atr DOUBLE PRECISION, p_up DOUBLE PRECISION, signal TEXT, regime TEXT, has_edge INTEGER,
-  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT,
+  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT, shown_p_up DOUBLE PRECISION, outcome_price DOUBLE PRECISION,
   UNIQUE(instrument, horizon, bar_ts)
 );
 CREATE TABLE IF NOT EXISTS shadow_trades(
@@ -25,9 +25,14 @@ CREATE TABLE IF NOT EXISTS candles(
   PRIMARY KEY(instrument, tf, ts)
 );
 CREATE TABLE IF NOT EXISTS instruments(id TEXT PRIMARY KEY, label TEXT, horizons TEXT, enabled INTEGER, sort INTEGER);
-CREATE TABLE IF NOT EXISTS access_codes(email TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, created TEXT, last_used TEXT);
+CREATE TABLE IF NOT EXISTS access_codes(email TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, created TEXT, last_used TEXT, role TEXT DEFAULT 'user');
 CREATE TABLE IF NOT EXISTS user_settings(
   email TEXT PRIMARY KEY, telegram_chat_id TEXT, telegram_on INTEGER DEFAULT 0, email_on INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS app_settings(name TEXT PRIMARY KEY, value TEXT, updated TEXT, updated_by TEXT);
+CREATE TABLE IF NOT EXISTS api_logs(
+  id BIGSERIAL PRIMARY KEY, ts TEXT, source TEXT, url TEXT, model TEXT, ok INTEGER, status INTEGER, ms INTEGER,
+  request TEXT, response TEXT, error TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_pred_inst ON predictions(instrument, id);
 CREATE INDEX IF NOT EXISTS idx_trades_inst ON shadow_trades(instrument, status);

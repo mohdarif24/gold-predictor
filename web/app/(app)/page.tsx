@@ -1,124 +1,63 @@
 "use client";
-import Link from "next/link";
-import { useState } from "react";
 import { ErrorNotice } from "@/components/ErrorNotice";
-import { LiveStatus } from "@/components/LiveStatus";
-import { PriceChart } from "@/components/Charts";
-import { SignalCard } from "@/components/SignalCard";
-import { Card, Notice, PageTitle, Skeleton, Stat } from "@/components/ui";
-import { type Candle, type Performance, type SignalsResponse, useApi } from "@/lib/api";
-import { fmtDateTime, price, pct, signedPct } from "@/lib/format";
-import { useT } from "@/lib/i18n";
+import { Card, PageTitle, Skeleton } from "@/components/ui";
+import { type PublicSignal, useApi } from "@/lib/api";
+import { fmtDateTime } from "@/lib/format";
+import { type Key, useT } from "@/lib/i18n";
 import { useInstrument } from "@/lib/instrument";
 
-export default function Dashboard() {
+/** What the gap between the two chances means, in plain words (whole percents, as shown on screen). */
+function leaning(up: number): Key {
+  const d = up - 50;
+  if (Math.abs(d) <= 3) return "sig.lean.none";
+  if (Math.abs(d) <= 8) return d > 0 ? "sig.lean.slight.up" : "sig.lean.slight.down";
+  return d > 0 ? "sig.lean.up" : "sig.lean.down";
+}
+
+/** The page everyone sees: for each time window, the measured chance that gold ends higher or lower. */
+export default function SignalPage() {
   const { t, lang, num } = useT();
   const { current } = useInstrument();
-  const id = current?.id;
-  const sig = useApi<SignalsResponse>(id ? `signals/${id}` : null, 60_000);
-  const perf = useApi<Performance>(id ? `performance/${id}` : null, 120_000);
-  const [tf, setTf] = useState<"D1" | "H1">("D1");
-  const candles = useApi<{ candles: Candle[] }>(id ? `candles/${id}?tf=${tf}&limit=250` : null, 120_000);
-
-  const rows = sig.data?.signals ?? [];
-  const proven = rows.filter((r) => r.has_edge).length;
-  const latest = rows.map((r) => r.created ?? r.bar_ts).filter(Boolean).sort().at(-1);
-
-  const cs = candles.data?.candles ?? [];
-  const last = cs.at(-1);
-  const prev = cs.at(-2);
-  const change = last && prev ? last.close / prev.close - 1 : null;
+  const res = useApi<PublicSignal>(current ? `public/${current.id}` : null, 120_000);
 
   return (
     <div className="flex flex-col gap-6">
-      <PageTitle
-        title={t("dash.title")}
-        sub={`${sig.data?.label ?? current?.label ?? ""}${latest ? ` · ${t("dash.updated")}: ${num(fmtDateTime(latest, lang))}` : ""}`}
-      />
-
-      {sig.data ? <LiveStatus lastCheck={sig.data.last_check} /> : null}
-      {sig.error ? <ErrorNotice message={sig.error} onRetry={sig.reload} /> : null}
-
-      {rows.length > 0 ? (
-        <Notice
-          action={
-            <Link href="/about" className="text-sm font-medium text-brass underline underline-offset-2">
-              {t("trust.learn")}
-            </Link>
-          }
-        >
-          <strong className="block">{proven === 0 ? t("trust.none.title") : t("trust.some.title", { n: proven })}</strong>
-          <span className="text-sm text-muted">{proven === 0 ? t("trust.none.body") : t("trust.some.body")}</span>
-        </Notice>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {sig.loading
-          ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-64" />)
-          : rows.map((r) => <SignalCard key={r.horizon} row={r} />)}
+      <PageTitle title={t("sig.title")} sub={res.data?.label ?? current?.label} />
+      {res.error ? <ErrorNotice message={res.error} onRetry={res.reload} /> : null}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {res.loading
+          ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-48" />)
+          : res.data?.signals.map((s) => {
+              const up = Math.round(s.p_up * 100);
+              const down = 100 - up;
+              return (
+                <Card key={s.horizon} className="flex flex-col gap-3">
+                  <h2 className="text-lg font-semibold">{t(`h.${s.horizon}` as Key)}</h2>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg bg-buy-soft p-3 text-buy">
+                      <div className="text-sm font-medium">▲ {t("sig.higher")}</div>
+                      <div className="text-3xl font-bold tabular-nums">{num(`${up}%`)}</div>
+                    </div>
+                    <div className="rounded-lg bg-sell-soft p-3 text-sell">
+                      <div className="text-sm font-medium">▼ {t("sig.lower")}</div>
+                      <div className="text-3xl font-bold tabular-nums">{num(`${down}%`)}</div>
+                    </div>
+                  </div>
+                  <div className="flex h-2.5 overflow-hidden rounded-full" role="img" aria-label={`${up}% / ${down}%`}>
+                    <div className="bg-buy" style={{ width: `${up}%` }} />
+                    <div className="bg-sell" style={{ width: `${down}%` }} />
+                  </div>
+                  <p className="font-medium">{t(leaning(up))}</p>
+                  <p className="text-xs text-muted">
+                    {s.cases ? t("sig.basis", { n: s.cases.toLocaleString("en-US") }) : null}
+                    {s.cases && s.as_of ? " · " : null}
+                    {s.as_of ? `${t("dash.updated")}: ${num(fmtDateTime(s.as_of, lang))}` : null}
+                  </p>
+                </Card>
+              );
+            })}
       </div>
-
-      <Card>
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">{t("chart.title")}</h2>
-            {last ? (
-              <p className="text-sm text-muted">
-                {t("chart.last")}: <span className="font-semibold text-ink tabular-nums">{num(price(last.close))}</span>
-                {change !== null ? (
-                  <span className={`ml-2 tabular-nums ${change >= 0 ? "text-buy" : "text-sell"}`}>{num(signedPct(change))}</span>
-                ) : null}
-              </p>
-            ) : null}
-          </div>
-          <div role="group" className="flex overflow-hidden rounded-lg border border-line text-sm">
-            {(["D1", "H1"] as const).map((x) => (
-              <button
-                key={x}
-                type="button"
-                onClick={() => setTf(x)}
-                aria-pressed={tf === x}
-                className={`px-3 py-1.5 font-medium ${tf === x ? "bg-brass-soft text-brass" : "text-muted hover:text-ink"}`}
-              >
-                {x === "D1" ? t("chart.daily") : t("chart.hourly")}
-              </button>
-            ))}
-          </div>
-        </div>
-        {candles.error ? (
-          <p className="py-10 text-center text-muted">{t("chart.error")}</p>
-        ) : cs.length === 0 ? (
-          <Skeleton className="h-72" />
-        ) : (
-          <PriceChart candles={cs} label={t("chart.title")} />
-        )}
-      </Card>
-
-      <Card>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold">{t("practice.title")}</h2>
-            <p className="text-sm text-muted">{t("practice.sub")}</p>
-          </div>
-          <Link href="/performance" className="text-sm font-medium text-brass underline underline-offset-2">
-            {t("practice.more")}
-          </Link>
-        </div>
-        {perf.data && perf.data.closed_trades > 0 ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label={t("practice.closed")} value={num(String(perf.data.closed_trades))} />
-            <Stat label={t("practice.win")} value={num(pct(perf.data.win_rate))} />
-            <Stat
-              label={t("practice.total")}
-              value={num(signedPct(perf.data.total_return))}
-              tone={perf.data.total_return >= 0 ? "buy" : "sell"}
-            />
-            <Stat label={t("practice.open")} value={num(String(perf.data.open_trades))} />
-          </div>
-        ) : (
-          <p className="text-sm text-muted">{t("practice.none")}</p>
-        )}
-      </Card>
+      <p className="rounded-xl border border-line bg-brass-soft p-4 text-sm">{t("sig.note")}</p>
     </div>
   );
 }

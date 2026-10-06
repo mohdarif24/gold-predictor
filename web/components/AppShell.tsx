@@ -2,17 +2,32 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useApi } from "@/lib/api";
 import { setLang, useT, type Key } from "@/lib/i18n";
 import { useInstrument } from "@/lib/instrument";
+import { useMe } from "@/lib/role";
 
-const NAV: { href: string; key: Key }[] = [
-  { href: "/", key: "nav.today" },
+type NavItem = { href: string; key: Key };
+
+/** Clients see only the plain signal; the super admin sees every screen. */
+const USER_NAV: NavItem[] = [
+  { href: "/", key: "nav.signal" },
+  { href: "/settings", key: "nav.settings" },
+  { href: "/about", key: "nav.about" },
+];
+const ADMIN_NAV: NavItem[] = [
+  { href: "/", key: "nav.signal" },
+  { href: "/dashboard", key: "nav.dashboard" },
+  { href: "/logs", key: "nav.logs" },
   { href: "/checklist", key: "nav.checklist" },
   { href: "/drivers", key: "nav.drivers" },
   { href: "/news", key: "nav.news" },
   { href: "/performance", key: "nav.performance" },
   { href: "/history", key: "nav.history" },
+  { href: "/model", key: "nav.model" },
+  { href: "/notebook", key: "nav.notebook" },
+  { href: "/api-settings", key: "nav.apisettings" },
+  { href: "/api-logs", key: "nav.apilogs" },
+  { href: "/users", key: "nav.users" },
   { href: "/settings", key: "nav.settings" },
   { href: "/about", key: "nav.about" },
 ];
@@ -40,7 +55,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useT();
   const path = usePathname();
   const { list, current, select } = useInstrument();
-  const { data: me } = useApi<{ email: string }>("me");
+  const { data: me } = useMe();
+  const nav = me?.role === "admin" ? ADMIN_NAV : USER_NAV;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -67,6 +83,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               </select>
             ) : null}
             <LangToggle />
+            {me?.role === "admin" ? (
+              <span title={me.email} className="rounded-lg bg-brass-soft px-2.5 py-1.5 text-xs font-semibold text-brass">{t("nav.admin")}</span>
+            ) : null}
             <button
               type="button"
               title={me?.email}
@@ -83,7 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <nav aria-label="Main" className="-mx-1 flex w-full gap-1 overflow-x-auto pb-1">
-            {NAV.map((n) => {
+            {nav.map((n) => {
               const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
               return (
                 <Link

@@ -155,3 +155,36 @@ export type ChecklistResponse = {
     model: { name: string | null; accuracy: number | null; baseline: number | null; n: number | null; has_edge: boolean } | null;
   }[];
 };
+
+export type PublicSignal = {
+  instrument: string;
+  label: string;
+  signals: { horizon: string; p_up: number; p_down: number; source: string; cases: number; as_of: string | null }[];
+};
+
+export type AdminUser = { email: string; role: "admin" | "user"; created: string | null; last_used: string | null };
+
+export type LogStatus = "right" | "wrong" | "pending" | "nocall";
+export type Tally = { right: number; wrong: number; pending: number; nocall: number; accuracy: number | null };
+export type PredictionLog = {
+  instrument: string;
+  horizon: string | null;
+  period: "day" | "week" | "month" | "year";
+  total: Tally;
+  buckets: ({ period: string } & Tally)[];
+  rows: {
+    id: number; created: string; horizon: string; bar_ts: string; price: number; p_up: number; shown_p_up: number | null;
+    said: number; signal: string; regime: string; has_edge: number; outcome_up: number | null; outcome_price: number | null;
+    resolved_ts: string | null; status: LogStatus;
+  }[];
+};
+
+export type LlmSettings = {
+  url: string; model: string; enabled: boolean; key_set: boolean; key_hint: string | null;
+  updated: string | null; updated_by: string | null; encryption_ready: boolean;
+};
+export type LlmTest = { ok: boolean; status: number | null; ms: number; answer: string | null; error: string | null };
+export type ApiLogs = {
+  rows: { id: number; ts: string; source: string; url: string; model: string; ok: number; status: number | null; ms: number | null; request: string; response: string; error: string }[];
+  last24h: { calls: number; failed: number; avg_ms: number | null; last_ok: string | null; last_fail: string | null };
+};

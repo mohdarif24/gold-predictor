@@ -1,4 +1,5 @@
 "use client";
+import { AdminOnly } from "@/components/AdminOnly";
 import { useState } from "react";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Card, PageTitle, Skeleton } from "@/components/ui";
@@ -47,7 +48,7 @@ const move = (x: number | null | undefined, num: (s: string) => string, points =
     <span className={x >= 0 ? "text-buy" : "text-sell"}>{num(points ? `${x >= 0 ? "+" : ""}${x.toFixed(2)} pt` : `${x >= 0 ? "+" : ""}${(x * 100).toFixed(2)}%`)}</span>
   );
 
-export default function DriversPage() {
+function DriversPageInner() {
   const { t, lang, num } = useT();
   const { current } = useInstrument();
   const res = useApi<DriversResponse>(current ? `drivers/${current.id}` : null, 300_000);
@@ -245,5 +246,13 @@ export default function DriversPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+export default function DriversPage() {
+  return (
+    <AdminOnly>
+      <DriversPageInner />
+    </AdminOnly>
   );
 }

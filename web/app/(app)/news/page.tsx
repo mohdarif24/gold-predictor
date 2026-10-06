@@ -1,4 +1,5 @@
 "use client";
+import { AdminOnly } from "@/components/AdminOnly";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Card, PageTitle, Skeleton } from "@/components/ui";
 import { type NewsResponse, useApi } from "@/lib/api";
@@ -11,7 +12,7 @@ const TONE = {
   neutral: "bg-wait-soft text-wait",
 } as const;
 
-export default function NewsPage() {
+function NewsPageInner() {
   const { t, lang, num } = useT();
   const res = useApi<NewsResponse>("news", 300_000);
   const d = res.data;
@@ -90,5 +91,13 @@ export default function NewsPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+export default function NewsPage() {
+  return (
+    <AdminOnly>
+      <NewsPageInner />
+    </AdminOnly>
   );
 }

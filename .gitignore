@@ -8,12 +8,12 @@
 *.pem
 *.key
 
-# generated data, local databases, models, logs
-store/
-data/
-models/
-reports/
-logs/
+# generated data, local databases, models, logs (top level only: web/app has a /logs page)
+/store/
+/data/
+/models/
+/reports/
+/logs/
 *.db
 *.db-wal
 *.db-shm

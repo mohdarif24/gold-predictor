@@ -61,14 +61,14 @@ def test_llm_answer_is_validated_and_bad_rows_are_dropped():
 
 def test_scoring_falls_back_to_rules_when_the_llm_fails(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "k")
-    monkeypatch.setattr(news, "score_llm", lambda titles, cfg: (_ for _ in ()).throw(RuntimeError("quota")))
+    monkeypatch.setattr(news, "score_llm", lambda titles, cfg, db=None: (_ for _ in ()).throw(RuntimeError("quota")))
     out = news.score_articles([{"id": "1", "title": "Gold falls on rate hike bets"}])
     assert out[0]["scorer"] == "rules" and out[0]["sentiment"] < 0
 
 
 def test_scoring_uses_the_llm_when_it_answers(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "k")
-    monkeypatch.setattr(news, "score_llm", lambda titles, cfg: {0: {"sentiment": 0.9, "topic": "rates", "impact": "high", "summary": "s"}})
+    monkeypatch.setattr(news, "score_llm", lambda titles, cfg, db=None: {0: {"sentiment": 0.9, "topic": "rates", "impact": "high", "summary": "s"}})
     out = news.score_articles([{"id": "1", "title": "x"}, {"id": "2", "title": "Gold falls on rate hike bets"}])
     assert out[0]["scorer"].startswith("llm:") and out[0]["sentiment"] == 0.9
     assert out[1]["scorer"] == "rules"  # the LLM skipped it

@@ -3,7 +3,8 @@
 Sources (no key needed): Google News RSS searches, and a public economic-calendar feed.
 Scoring: transparent keyword rules always work offline. If an OpenAI-compatible LLM is configured it scores the
 headlines instead (any free provider works: GitHub Models, Groq, OpenRouter, Gemini...), and any failure falls back
-to the rules. The LLM is used only when LLM_API_KEY is set; LLM_API_URL and LLM_MODEL pick the provider.
+to the rules. The provider (URL, model, key) comes from the administrator's settings in the web app, or else from the
+LLM_API_KEY / LLM_API_URL / LLM_MODEL environment variables. Every LLM call is written to the api_logs table.
 
 A sentiment score runs from -1 (bearish for gold) to +1 (bullish for gold).
 """
@@ -12,6 +13,7 @@ import json
 import os
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -20,6 +22,8 @@ from email.utils import parsedate_to_datetime
 
 import numpy as np
 import pandas as pd
+
+from . import settings
 
 QUERIES = {
     "gold": "gold price",
@@ -113,13 +117,9 @@ def fetch_google_news(query: str, when: str = "2d") -> list:
 
 
 # ------------------------------------------------------------------------------------------------------ LLM scoring
-def llm_config():
-    key = os.getenv("LLM_API_KEY")
-    if not key:
-        return None
-    # `or` (not a default argument) because CI passes unset secrets as empty strings
-    return {"key": key, "url": os.getenv("LLM_API_URL") or "https://models.github.ai/inference/chat/completions",
-            "model": os.getenv("LLM_MODEL") or "openai/gpt-4o-mini"}
+def llm_config(db=None):
+    """Admin settings saved from the web app first, then environment variables (see core/settings.py)."""
+    return settings.llm_config(db)
 
 
 _PROMPT = (
@@ -149,23 +149,43 @@ def parse_llm_json(text: str, n: int) -> dict:
     return out
 
 
-def score_llm(titles: list, cfg: dict, timeout: int = 60) -> dict:
-    body = {"model": cfg["model"], "temperature": 0, "max_tokens": 2500,
-            "messages": [{"role": "user", "content": _PROMPT + "\n".join(f"{i}. {t}" for i, t in enumerate(titles))}]}
+def score_llm(titles: list, cfg: dict, timeout: int = 60, db=None) -> dict:
+    """Score headlines with the LLM. Every call (answer or failure) goes to the admin's API log."""
+    prompt = _PROMPT + "\n".join(f"{i}. {t}" for i, t in enumerate(titles))
+    body = {"model": cfg["model"], "temperature": 0, "max_tokens": 2500, "messages": [{"role": "user", "content": prompt}]}
     req = urllib.request.Request(cfg["url"], data=json.dumps(body).encode(), method="POST",
                                  headers={"Authorization": f"Bearer {cfg['key']}", "Content-Type": "application/json"})
-    resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
-    return parse_llm_json(resp["choices"][0]["message"]["content"], len(titles))
+    status, raw = None, ""
+    with settings.Timer() as tm:
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                status, raw = r.status, r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            status, raw = e.code, e.read().decode("utf-8", "replace")
+        except Exception as e:
+            settings.log(db, "llm:news", cfg["url"], cfg["model"], ok=False, request=prompt, error=f"{type(e).__name__}: {e}")
+            raise
+    try:
+        if status != 200:
+            raise RuntimeError(f"HTTP {status}")
+        out = parse_llm_json(json.loads(raw)["choices"][0]["message"]["content"], len(titles))
+    except Exception as e:
+        settings.log(db, "llm:news", cfg["url"], cfg["model"], ok=False, status=status, ms=tm.ms, request=prompt,
+                     response=raw, error=f"{type(e).__name__}: {e}")
+        raise
+    settings.log(db, "llm:news", cfg["url"], cfg["model"], ok=True, status=status, ms=tm.ms, request=prompt,
+                 response=raw, error="" if len(out) == len(titles) else f"{len(titles) - len(out)} headlines unreadable")
+    return out
 
 
-def score_articles(items: list) -> list:
+def score_articles(items: list, db=None) -> list:
     """Attach sentiment, topic and impact to each article (LLM when configured and working, otherwise the rules)."""
-    cfg, llm = llm_config(), {}
+    cfg, llm = llm_config(db), {}
     if cfg and items:
         for i in range(0, len(items), 25):
             batch = items[i:i + 25]
             try:
-                got = score_llm([a["title"] for a in batch], cfg)
+                got = score_llm([a["title"] for a in batch], cfg, db=db)
                 llm.update({i + k: v for k, v in got.items()})
             except Exception as e:  # network, quota, bad JSON: the rules cover it
                 print(f"LLM scoring skipped for a batch: {type(e).__name__}: {str(e)[:100]}", flush=True)
@@ -184,7 +204,7 @@ def store_articles(db, items: list, use_llm: bool = True) -> int:
     have = {r["id"] for r in db.execute("SELECT id FROM news WHERE id IN (%s)" % ",".join("?" * len(items)),
                                          [a["id"] for a in items]).fetchall()}
     fresh = [a for a in items if a["id"] not in have]
-    scored = score_articles(fresh) if use_llm else [{**a, **score_rules(a["title"])} for a in fresh]
+    scored = score_articles(fresh, db) if use_llm else [{**a, **score_rules(a["title"])} for a in fresh]
     for a in scored:
         db.execute(
             "INSERT INTO news(id, published, source, title, url, topic, sentiment, impact, summary, scorer) "

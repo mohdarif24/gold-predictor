@@ -3,7 +3,7 @@ from functools import lru_cache
 
 import pandas as pd
 
-from . import scorecard, shadow, sources, store
+from . import public, scorecard, shadow, sources, store
 from .backtest import evaluate, walk_forward
 from .explain import explain
 from .features import TF_MINUTES, build_features, feature_group, make_target, select_columns
@@ -108,6 +108,15 @@ def predict(name: str, cfg: dict, get_bars, get_drivers, db, get_cot=None, get_n
             "price": price, "atr": float(row["atr_pct"].iloc[0] * price), "p_up": p_up, "signal": signal,
             "regime": regime, "has_edge": int(has_edge), "model_version": meta["version"], "reason": reason,
         }
+        card = None
+        if hz["tf"] == "D1":  # the factor checklist uses daily inputs, so it exists for the daily horizons
+            try:
+                card = scorecard.build(X, make_target(df, hz["steps"])[1])
+                store.save_scorecard(db, name, hz["name"], card)
+            except Exception as e:  # extra information; never lose the prediction because of it
+                print(f"checklist skipped for {name} {hz['name']}: {e}", flush=True)
+        # what clients are shown right now, kept with the reading so the log can score it later
+        rec["shown_p_up"] = public.chance_up(card, store.load_research(db, name, hz["name"]), p_up)["p_up"]
         pid = store.log_prediction(db, rec)
         rec["is_new"] = pid is not None
         if rec["is_new"]:  # explain each new reading once; the screen shows the latest
@@ -117,11 +126,6 @@ def predict(name: str, cfg: dict, get_bars, get_drivers, db, get_cot=None, get_n
                 store.save_explanation(db, name, hz["name"], ex)
             except Exception as e:  # the explanation is extra; never lose the prediction because of it
                 print(f"explanation skipped for {name} {hz['name']}: {e}", flush=True)
-        if hz["tf"] == "D1":  # the factor checklist uses daily inputs, so it exists for the daily horizons
-            try:
-                store.save_scorecard(db, name, hz["name"], scorecard.build(X, make_target(df, hz["steps"])[1]))
-            except Exception as e:  # extra information; never lose the prediction because of it
-                print(f"checklist skipped for {name} {hz['name']}: {e}", flush=True)
         shadow.open_trade(db, pid, rec, cfg["shadow"])
         results.append(rec)
     return results

@@ -151,3 +151,21 @@ def test_access_codes_are_stored_hashed_replaceable_and_revocable(db):
     second = ac.add(db, "client@example.com")  # a new code replaces the old one
     assert second != code and db.execute("SELECT COUNT(*) AS n FROM access_codes").fetchone()["n"] == 1
     assert ac.revoke(db, "client@example.com") and not ac.revoke(db, "client@example.com")
+
+
+def test_roles_and_adding_a_column_to_an_existing_database(tmp_path):
+    """A database created before roles existed gets the column on connect; new codes can be admin or user."""
+    import sqlite3, importlib.util
+    path = tmp_path / "old.db"
+    c = sqlite3.connect(path)
+    c.execute("CREATE TABLE access_codes(email TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, created TEXT, last_used TEXT)")
+    c.execute("INSERT INTO access_codes VALUES('old@x.com', 'h', 'then', NULL)")
+    c.commit(); c.close()
+    db = store.connect(str(path))
+    assert db.execute("SELECT role FROM access_codes WHERE email='old@x.com'").fetchone()["role"] == "user"
+    spec = importlib.util.spec_from_file_location("access_code", Path(__file__).resolve().parents[1] / "scripts" / "access_code.py")
+    ac = importlib.util.module_from_spec(spec); spec.loader.exec_module(ac)
+    ac.add(db, "boss@x.com", admin=True)
+    ac.add(db, "client@x.com")
+    roles = {r["email"]: r["role"] for r in db.execute("SELECT email, role FROM access_codes").fetchall()}
+    assert roles == {"old@x.com": "user", "boss@x.com": "admin", "client@x.com": "user"}

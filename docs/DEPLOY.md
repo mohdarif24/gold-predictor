@@ -33,6 +33,7 @@ Python 3.13 only if you want to run things locally. Optional: a Telegram bot (vi
 | `CLOUDFLARE_ACCOUNT_ID` | deploy job (shown on the Cloudflare dashboard) |
 | `TELEGRAM_BOT_TOKEN` | Telegram alerts (optional) |
 | `LLM_API_KEY`, `LLM_API_URL`, `LLM_MODEL` | an AI model that reads news headlines (optional, see below) |
+| `SETTINGS_KEY` | lets the jobs read an AI key saved from the website's Model API page (same value as the Worker secret) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | email alerts (optional) |
 
    With the GitHub CLI: `gh secret set DATABASE_URL`.
@@ -74,11 +75,21 @@ python scripts/access_code.py list
 A code is 22 random characters and only its hash is stored. Signing in sets a 30-day HttpOnly cookie, and every request re-checks
 that the code still exists. If Cloudflare Access is also configured, either way in works.
 
+**Roles.** A *user* sees only the simple “higher X% / lower Y%” signal. A *super admin* sees every screen (dashboard, prediction
+log, checklist, drivers, news, results, model explanation, notebook, Model API, API logs) and manages people on the **Users** page.
+Make the first super admin with `python scripts/access_code.py add you@example.com --admin`; after that, add people from the
+website. With Cloudflare Access, list super admins in the Worker variable `ADMIN_EMAILS` (comma separated).
+
 ## 4. News reading with an AI model (optional)
 Without a key, headlines are read by keyword rules (always works, less subtle). To use an AI model set `LLM_API_KEY` to a key from any
 provider with an OpenAI-compatible chat API, and optionally `LLM_API_URL` (the full `.../chat/completions` address) and `LLM_MODEL`.
 Free tiers exist at several providers and change often; check the provider's current limits. If the model fails or runs out of quota the
 rules take over, so the site never breaks. Headline readings are automatic guesses and can be wrong.
+
+The super admin can also change the provider from the website (**Model API** page: address, model, key, on/off, and a **Test**
+button). For that, set the same random `SETTINGS_KEY` (32+ characters) as a Worker secret and as a GitHub secret: the website
+encrypts the key with it and the scheduled jobs decrypt it. Settings saved on the website win over the `LLM_*` secrets. Every AI
+call, with its request, response, time and errors, is listed on the **API Logs** page.
 
 ## 4b. Alerts (optional)
 Add the Telegram and/or SMTP secrets in GitHub. Each person turns alerts on in the site's **Alerts** page. For Telegram they

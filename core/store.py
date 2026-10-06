@@ -17,7 +17,7 @@ _DDL = """
 CREATE TABLE IF NOT EXISTS predictions(
   id {pk}, created TEXT, instrument TEXT, horizon TEXT, tf TEXT, steps INTEGER,
   bar_ts TEXT, price {real}, atr {real}, p_up {real}, signal TEXT, regime TEXT, has_edge INTEGER,
-  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT,
+  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT, shown_p_up {real}, outcome_price {real},
   UNIQUE(instrument, horizon, bar_ts)
 );
 CREATE TABLE IF NOT EXISTS shadow_trades(
@@ -41,9 +41,14 @@ CREATE TABLE IF NOT EXISTS candles(
   PRIMARY KEY(instrument, tf, ts)
 );
 CREATE TABLE IF NOT EXISTS instruments(id TEXT PRIMARY KEY, label TEXT, horizons TEXT, enabled INTEGER, sort INTEGER);
-CREATE TABLE IF NOT EXISTS access_codes(email TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, created TEXT, last_used TEXT);
+CREATE TABLE IF NOT EXISTS access_codes(email TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, created TEXT, last_used TEXT, role TEXT DEFAULT 'user');
 CREATE TABLE IF NOT EXISTS user_settings(
   email TEXT PRIMARY KEY, telegram_chat_id TEXT, telegram_on INTEGER DEFAULT 0, email_on INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS app_settings(name TEXT PRIMARY KEY, value TEXT, updated TEXT, updated_by TEXT);
+CREATE TABLE IF NOT EXISTS api_logs(
+  id {pk}, ts TEXT, source TEXT, url TEXT, model TEXT, ok INTEGER, status INTEGER, ms INTEGER,
+  request TEXT, response TEXT, error TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_pred_inst ON predictions(instrument, id);
 CREATE INDEX IF NOT EXISTS idx_trades_inst ON shadow_trades(instrument, status);
@@ -115,10 +120,28 @@ def schema_sql(kind: str) -> str:
     return _DDL.format(**_TYPES[kind]).strip() + "\n"
 
 
+# Columns added after a table first shipped: (table, column, definition). Existing databases get them on connect.
+_ADDED_COLUMNS = [
+    ("access_codes", "role", "TEXT DEFAULT 'user'"),
+    ("predictions", "shown_p_up", "{real}"),  # the chance clients were shown at that moment
+    ("predictions", "outcome_price", "{real}"),  # the price when the outcome was known
+]
+
+
+def _columns(db: Db, table: str) -> set:
+    if db.kind == "sqlite":
+        return {r[1] for r in db.conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    return {r["column_name"] for r in db.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = ?", (table,)).fetchall()}
+
+
 def ensure_schema(db: Db):
     for stmt in schema_sql(db.kind).split(";"):
         if stmt.strip():
             db.execute(stmt)
+    for table, col, definition in _ADDED_COLUMNS:
+        if col not in _columns(db, table):
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition.format(**_TYPES[db.kind])}")
     db.commit()
 
 
@@ -146,11 +169,11 @@ def now_iso() -> str:
 def log_prediction(db: Db, rec: dict):
     """Insert a prediction; returns its id, or None if this bar was already predicted."""
     cols = ["created", "instrument", "horizon", "tf", "steps", "bar_ts", "price", "atr", "p_up", "signal",
-            "regime", "has_edge", "model_version", "reason"]
+            "regime", "has_edge", "model_version", "reason", "shown_p_up"]
     row = db.execute(
         f"INSERT INTO predictions({','.join(cols)}) VALUES({','.join('?' * len(cols))}) "
         "ON CONFLICT(instrument, horizon, bar_ts) DO NOTHING RETURNING id",
-        [rec[c] for c in cols],
+        [rec.get(c) for c in cols],
     ).fetchone()
     db.commit()
     return row["id"] if row else None

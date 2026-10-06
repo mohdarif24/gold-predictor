@@ -1,4 +1,5 @@
 "use client";
+import { AdminOnly } from "@/components/AdminOnly";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Card, PageTitle, Skeleton } from "@/components/ui";
 import { type HistoryRow, useApi } from "@/lib/api";
@@ -6,7 +7,7 @@ import { fmtDateTime, pct } from "@/lib/format";
 import { type Key, useT } from "@/lib/i18n";
 import { useInstrument } from "@/lib/instrument";
 
-export default function HistoryPage() {
+function HistoryPageInner() {
   const { t, lang, num } = useT();
   const { current } = useInstrument();
   const h = useApi<HistoryRow[]>(current ? `history/${current.id}?limit=100` : null, 120_000);
@@ -54,5 +55,13 @@ export default function HistoryPage() {
         </Card>
       ) : null}
     </div>
+  );
+}
+
+export default function HistoryPage() {
+  return (
+    <AdminOnly>
+      <HistoryPageInner />
+    </AdminOnly>
   );
 }

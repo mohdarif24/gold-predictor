@@ -1,4 +1,5 @@
 "use client";
+import { AdminOnly } from "@/components/AdminOnly";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { EquityChart } from "@/components/Charts";
 import { Card, PageTitle, Skeleton, Stat } from "@/components/ui";
@@ -7,7 +8,7 @@ import { chartTimes, fmtDateTime, pct, price, signedPct } from "@/lib/format";
 import { type Key, useT } from "@/lib/i18n";
 import { useInstrument } from "@/lib/instrument";
 
-export default function PerformancePage() {
+function PerformancePageInner() {
   const { t, lang, num } = useT();
   const { current } = useInstrument();
   const id = current?.id;
@@ -89,5 +90,13 @@ export default function PerformancePage() {
         )}
       </Card>
     </div>
+  );
+}
+
+export default function PerformancePage() {
+  return (
+    <AdminOnly>
+      <PerformancePageInner />
+    </AdminOnly>
   );
 }
