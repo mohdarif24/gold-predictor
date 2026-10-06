@@ -541,7 +541,7 @@ export function useT() {
     lang,
     t(key: Key, vars?: Record<string, string | number>): string {
       let s: string = dict[lang][key] ?? dict.en[key] ?? key;
-      if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, localizeDigits(String(v), lang));
+      if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(localizeDigits(String(v), lang)); // every occurrence, not just the first
       return s;
     },
     num(s: string): string {
