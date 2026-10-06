@@ -66,10 +66,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               </select>
             ) : null}
             <LangToggle />
-            {/* Cloudflare Access serves this path and ends the login session */}
-            <a href="/cdn-cgi/access/logout" className="rounded-lg px-3 py-1.5 text-sm text-muted hover:text-ink" title={me?.email}>
+            <button
+              type="button"
+              title={me?.email}
+              onClick={async () => {
+                await fetch("/api/logout", { method: "POST" }).catch(() => null);
+                // full reload on purpose: drops any state from the old session
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.assign("/login");
+              }}
+              className="rounded-lg px-3 py-1.5 text-sm text-muted hover:text-ink"
+            >
               {t("logout")}
-            </a>
+            </button>
           </div>
 
           <nav aria-label="Main" className="-mx-1 flex w-full gap-1 overflow-x-auto pb-1">

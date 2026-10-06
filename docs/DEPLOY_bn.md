@@ -52,6 +52,19 @@ GitHub, [Neon](https://neon.tech) আর [Cloudflare](https://dash.cloudflare.co
 
 নতুন client যোগ করতে: Access policy-তে তাঁর ইমেইল যোগ করুন। আর কিছু না।
 
+## ৩খ. Cloudflare Access ছাড়া সাইন-ইন: অ্যাক্সেস কোড
+Zero Trust চালু করতে না চাইলে সাইটের নিজস্ব সাইন-ইন আছে। Worker secret `SESSION_SECRET` বসান (৩২+ অক্ষরের যেকোনো এলোমেলো লেখা),
+তারপর প্রত্যেককে একটা কোড দিন:
+
+```bash
+python scripts/access_code.py add client@example.com --save store/code_client.txt   # DATABASE_URL বসানো অবস্থায়
+python scripts/access_code.py revoke client@example.com                            # সাথে সাথে প্রবেশ বন্ধ
+python scripts/access_code.py list
+```
+
+কোড ২২টা এলোমেলো অক্ষর, ডেটাবেসে শুধু তার hash থাকে। ঢুকলে ৩০ দিনের HttpOnly কুকি, আর প্রতিটা অনুরোধে কোড এখনো আছে কিনা যাচাই হয়।
+Cloudflare Access-ও চালু থাকলে দুই পথেই ঢোকা যায়।
+
 ## ৪. AI মডেল দিয়ে খবর পড়া (ঐচ্ছিক)
 key না দিলে শিরোনাম কিওয়ার্ড-নিয়মে পড়া হয় (সবসময় কাজ করে, কম সূক্ষ্ম)। AI মডেল চাইলে যেকোনো OpenAI-সুসঙ্গত chat API-র key `LLM_API_KEY`-তে দিন, আর
 চাইলে `LLM_API_URL` (পুরো `.../chat/completions` ঠিকানা) ও `LLM_MODEL`। কয়েকটা পরিষেবার বিনামূল্যের plan আছে, তা প্রায়ই বদলায়, তাই বর্তমান সীমা দেখে নিন।

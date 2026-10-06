@@ -12,16 +12,10 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/${path}`, { ...init, headers: { "Content-Type": "application/json" } });
   if (res.status === 401) {
-    // Cloudflare Access sends a signed-out visitor to its login page on reload. Reload at most once per minute.
-    try {
-      const last = Number(sessionStorage.getItem("gp_reload") ?? 0);
-      if (Date.now() - last > 60_000) {
-        sessionStorage.setItem("gp_reload", String(Date.now()));
-        window.location.reload();
-      }
-    } catch {
-      /* storage blocked: the error notice below still shows */
-    }
+    // not signed in (or the code was revoked): go to the sign-in page
+    // full reload on purpose: drops any state from the old session
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    if (window.location.pathname !== "/login") window.location.assign("/login");
     throw new ApiError(401, "not signed in");
   }
   const body = await res.json().catch(() => ({}));

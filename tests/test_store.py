@@ -137,3 +137,17 @@ def test_copy_between_databases_keeps_everything_and_the_id_counter(tmp_path, pg
 
 def db_count(db, table):
     return db.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]
+
+
+def test_access_codes_are_stored_hashed_replaceable_and_revocable(db):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("access_code", Path(__file__).resolve().parents[1] / "scripts" / "access_code.py")
+    ac = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ac)
+    code = ac.add(db, "Client@Example.com")
+    assert len(code) >= 20
+    row = db.execute("SELECT * FROM access_codes").fetchone()
+    assert row["email"] == "client@example.com" and row["code_hash"] == ac.code_hash(code) and code not in str(dict(row))
+    second = ac.add(db, "client@example.com")  # a new code replaces the old one
+    assert second != code and db.execute("SELECT COUNT(*) AS n FROM access_codes").fetchone()["n"] == 1
+    assert ac.revoke(db, "client@example.com") and not ac.revoke(db, "client@example.com")

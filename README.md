@@ -79,11 +79,11 @@ Two tests guard the procedure itself: a pure random walk must never get an edge,
 
 ```text
 GitHub Actions (every 15 min)  ->  Neon Postgres  <-  Cloudflare Workers (website + API)
-   Python: predict.yml, train.yml,  predictions, models,    sign-in by Cloudflare Access (email code)
+   Python: predict.yml, train.yml,  predictions, models,    sign-in: access codes or Cloudflare Access
    research.yml (monthly study)     research, news, candles
 ```
 
-The Python jobs write to the database; the Next.js site only reads it. The site is in English and Bengali and has: a card per time window with the reason in plain words, a **What moves gold** screen (model accuracy with its range, how much of the reading comes from the latest data versus background, what each family of inputs is pushing, the biggest single inputs, how reliable confident calls were, and the live state of every market input with the reason it matters), **News & events**, a price chart, history, practice-trade results, and Telegram or email alerts for new Buy/Sell signals. Every API call checks the signed Cloudflare Access token itself.
+The Python jobs write to the database; the Next.js site only reads it. The site is in English and Bengali and has: a card per time window with the reason in plain words, a **What moves gold** screen (model accuracy with its range, how much of the reading comes from the latest data versus background, what each family of inputs is pushing, the biggest single inputs, how reliable confident calls were, and the live state of every market input with the reason it matters), **News & events**, a price chart, history, practice-trade results, and Telegram or email alerts for new Buy/Sell signals. Sign-in is either Cloudflare Access or personal access codes (`scripts/access_code.py`); every API call re-checks it.
 
 GitHub's scheduler is best-effort: runs can start 5-15 minutes late and an occasional one is skipped, and GitHub pauses schedules after 60 days without repository activity. This is a near-real-time tool, not a tick-by-tick one.
 

@@ -25,6 +25,10 @@ const en = {
   "login.busy": "Signing in…",
   "login.wrong": "Wrong email or password.",
   "login.locked": "Too many attempts. Please wait a few minutes.",
+  "login.code": "Access code",
+  "login.code.help": "The site owner gives each person a personal code. Keep it private, like a password.",
+  "login.wrongcode": "That code is not valid. Check it and try again.",
+  "login.notconfigured": "Sign-in is not set up on the server yet.",
 
   "dash.title": "Today’s view",
   "dash.updated": "Last reading",
@@ -256,6 +260,10 @@ const bn: Record<Key, string> = {
   "login.busy": "সাইন ইন হচ্ছে…",
   "login.wrong": "ইমেইল বা পাসওয়ার্ড ভুল।",
   "login.locked": "অনেকবার চেষ্টা হয়েছে। কয়েক মিনিট অপেক্ষা করুন।",
+  "login.code": "অ্যাক্সেস কোড",
+  "login.code.help": "সাইটের মালিক প্রত্যেককে আলাদা কোড দেন। পাসওয়ার্ডের মতো গোপন রাখুন।",
+  "login.wrongcode": "কোডটি সঠিক নয়। দেখে আবার চেষ্টা করুন।",
+  "login.notconfigured": "সার্ভারে সাইন-ইন এখনো চালু করা হয়নি।",
 
   "dash.title": "আজকের চিত্র",
   "dash.updated": "সর্বশেষ পর্যবেক্ষণ",

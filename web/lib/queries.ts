@@ -250,6 +250,19 @@ export async function getNews(run: Run, now: Date = new Date()) {
   };
 }
 
+/** The email whose access code has this hash (and record the sign-in), or null. */
+export async function emailForCode(run: Run, codeHash: string, now: Date = new Date()): Promise<string | null> {
+  const rows = await run<{ email: string }>(
+    "UPDATE access_codes SET last_used = $2 WHERE code_hash = $1 RETURNING email",
+    [codeHash, now.toISOString().slice(0, 19) + "+00:00"],
+  );
+  return rows[0]?.email ?? null;
+}
+
+export async function hasAccessCode(run: Run, email: string): Promise<boolean> {
+  return (await run("SELECT 1 FROM access_codes WHERE email = $1", [email])).length > 0;
+}
+
 export type AlertSettings = { telegram_on: boolean; telegram_chat_id: string | null; email_on: boolean };
 
 export async function getAlerts(run: Run, email: string): Promise<AlertSettings> {

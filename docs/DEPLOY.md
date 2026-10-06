@@ -60,6 +60,20 @@ Python 3.13 only if you want to run things locally. Optional: a Telegram bot (vi
 
 To add a client later: add their email to the Access policy. Nothing else.
 
+## 3b. Sign-in without Cloudflare Access: access codes
+If you do not want to set up Zero Trust, the site has its own sign-in. Set a Worker secret `SESSION_SECRET`
+(any random text of 32+ characters, for example from `python -c "import secrets; print(secrets.token_urlsafe(48))"`), then give
+each person a code:
+
+```bash
+python scripts/access_code.py add client@example.com --save store/code_client.txt   # with DATABASE_URL set
+python scripts/access_code.py revoke client@example.com                            # locks them out at once
+python scripts/access_code.py list
+```
+
+A code is 22 random characters and only its hash is stored. Signing in sets a 30-day HttpOnly cookie, and every request re-checks
+that the code still exists. If Cloudflare Access is also configured, either way in works.
+
 ## 4. News reading with an AI model (optional)
 Without a key, headlines are read by keyword rules (always works, less subtle). To use an AI model set `LLM_API_KEY` to a key from any
 provider with an OpenAI-compatible chat API, and optionally `LLM_API_URL` (the full `.../chat/completions` address) and `LLM_MODEL`.
