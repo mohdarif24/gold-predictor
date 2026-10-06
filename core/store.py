@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS heartbeat(instrument TEXT PRIMARY KEY, ts TEXT);
 CREATE TABLE IF NOT EXISTS models(name TEXT PRIMARY KEY, blob {blob}, meta TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS reports(instrument TEXT PRIMARY KEY, body TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS research(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
+CREATE TABLE IF NOT EXISTS scorecards(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
 CREATE TABLE IF NOT EXISTS explanations(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
 CREATE TABLE IF NOT EXISTS series(name TEXT, ts TEXT, value {real}, PRIMARY KEY(name, ts));
 CREATE TABLE IF NOT EXISTS news(
@@ -242,6 +243,15 @@ def load_research(db: Db, instrument: str, horizon: str):
 def save_explanation(db: Db, instrument: str, horizon: str, body: dict):
     """What drove the latest reading (shown on the 'what gold depends on' screen)."""
     _save_json_row(db, "explanations", instrument, horizon, body)
+
+
+def save_scorecard(db: Db, instrument: str, horizon: str, body: dict):
+    """The factor checklist for one horizon (what each factor says now and how often it was right before)."""
+    _save_json_row(db, "scorecards", instrument, horizon, body)
+
+
+def load_scorecard(db: Db, instrument: str, horizon: str):
+    return _load_json_row(db, "scorecards", instrument, horizon)
 
 
 def load_explanation(db: Db, instrument: str, horizon: str):

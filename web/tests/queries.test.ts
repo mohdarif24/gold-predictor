@@ -213,3 +213,16 @@ describe("news and events", () => {
     expect(n.mood).toMatchObject({ score: null, label: null, count: 0 });
   });
 });
+
+describe("checklist", () => {
+  it("returns the stored checklist per horizon with the model's tested accuracy beside it", async () => {
+    const card = { now: { dollar: -1, trend: 1 }, net: 0, direction: "none", as_of: "2026-10-05",
+      full: { base_up: { n: 10, rate: 0.5, lo: 0.2, hi: 0.8 }, factors: {}, total: { n: 0, rate: null, lo: null, hi: null }, ladder: [], from: "2000-01-01", to: "2026-10-01" },
+      recent: { base_up: { n: 5, rate: 0.6, lo: 0.2, hi: 0.9 }, factors: {}, total: { n: 0, rate: null, lo: null, hi: null }, ladder: [], from: "2021-01-01", to: "2026-10-01" } };
+    await db.query("INSERT INTO scorecards VALUES('gold','1d',$1,'now')", [JSON.stringify(card)]);
+    const c = await q.getChecklist(run, "gold");
+    expect(c.horizons.map((h) => h.horizon)).toEqual(["1d"]); // only horizons that have a checklist
+    expect(c.horizons[0].card.now.dollar).toBe(-1);
+    expect(c.horizons[0].model).toMatchObject({ name: "rf", accuracy: 0.52, baseline: 0.54, has_edge: false });
+  });
+});

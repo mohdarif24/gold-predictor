@@ -203,3 +203,17 @@ export function niceNumber(v: number): string {
 }
 
 export const REGIME_ORDER = ["TRENDING", "RANGING", "HIGH_VOL", "LOW_VOL", "BREAKOUT", "ABNORMAL"];
+
+/** The checklist factors: name, and the rule for when each one says "gold up". Fixed in advance, never tuned. */
+export const FACTORS: Record<string, { label: Text; rule: Text }> = {
+  real_yield: { label: { en: "Real interest rate", bn: "প্রকৃত সুদ" }, rule: { en: "Up if it fell over 5 days, down if it rose", bn: "৫ দিনে কমলে উঠবে, বাড়লে নামবে" } },
+  dollar: { label: { en: "US dollar", bn: "মার্কিন ডলার" }, rule: { en: "Up if the dollar index fell over 5 days", bn: "৫ দিনে ডলার সূচক কমলে উঠবে" } },
+  inflation: { label: { en: "Inflation expectation", bn: "মূল্যস্ফীতির প্রত্যাশা" }, rule: { en: "Up if it rose over 20 days", bn: "২০ দিনে বাড়লে উঠবে" } },
+  fear: { label: { en: "Fear index (VIX)", bn: "ভয়ের সূচক (VIX)" }, rule: { en: "Up if fear rose over 5 days", bn: "৫ দিনে ভয় বাড়লে উঠবে" } },
+  silver: { label: { en: "Silver", bn: "রুপা" }, rule: { en: "Up if silver rose over 5 days", bn: "৫ দিনে রুপা বাড়লে উঠবে" } },
+  trend: { label: { en: "Price trend", bn: "দামের প্রবণতা" }, rule: { en: "Up if the price is above its 50-day average", bn: "দাম ৫০ দিনের গড়ের উপরে থাকলে উঠবে" } },
+  rsi: { label: { en: "Overbought / oversold (RSI)", bn: "অতি-কেনা / অতি-বেচা (RSI)" }, rule: { en: "Up below 30, down above 70, no view between", bn: "৩০-এর নিচে উঠবে, ৭০-এর উপরে নামবে, মাঝে মত নেই" } },
+  positioning: { label: { en: "Hedge-fund positions", bn: "হেজ ফান্ডের অবস্থান" }, rule: { en: "Down if bets are in the top 20% of 3 years (crowded), up if in the bottom 20%", bn: "৩ বছরের উপরের ২০%-এ (ভিড়) থাকলে নামবে, নিচের ২০%-এ উঠবে" } },
+  news: { label: { en: "News mood (previous day)", bn: "খবরের হাওয়া (আগের দিন)" }, rule: { en: "Up if headlines were positive for gold, down if negative", bn: "শিরোনাম সোনার পক্ষে হলে উঠবে, বিপক্ষে নামবে" } },
+  fed: { label: { en: "Fed policy rate", bn: "ফেডের নীতি-সুদ" }, rule: { en: "Up after a cut in the last 20 days, down after a hike", bn: "গত ২০ দিনে কমালে উঠবে, বাড়ালে নামবে" } },
+};

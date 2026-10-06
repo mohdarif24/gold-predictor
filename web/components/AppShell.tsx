@@ -8,6 +8,7 @@ import { useInstrument } from "@/lib/instrument";
 
 const NAV: { href: string; key: Key }[] = [
   { href: "/", key: "nav.today" },
+  { href: "/checklist", key: "nav.checklist" },
   { href: "/drivers", key: "nav.drivers" },
   { href: "/news", key: "nav.news" },
   { href: "/performance", key: "nav.performance" },

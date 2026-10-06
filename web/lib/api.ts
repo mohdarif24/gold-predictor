@@ -140,3 +140,18 @@ export type NewsResponse = {
   articles: { published: string; source: string; title: string; url: string; topic: string; sentiment: number; impact: string; summary: string | null; scorer: string; label: "bullish" | "bearish" | "neutral" }[];
   events: { ts: string; country: string; title: string; impact: string; forecast: string | null; previous: string | null }[];
 };
+
+export type Rate = { n: number; rate: number | null; lo: number | null; hi: number | null };
+export type CardPeriod = {
+  base_up: Rate; from: string | null; to: string | null; total: Rate;
+  factors: Record<string, { any: Rate; up: Rate; down: Rate }>;
+  ladder: ({ direction: "up" | "down"; at_least: number } & Rate)[];
+};
+export type ChecklistResponse = {
+  instrument: string;
+  horizons: {
+    horizon: string;
+    card: { now: Record<string, number>; net: number; direction: "up" | "down" | "none"; as_of: string; full: CardPeriod; recent: CardPeriod };
+    model: { name: string | null; accuracy: number | null; baseline: number | null; n: number | null; has_edge: boolean } | null;
+  }[];
+};

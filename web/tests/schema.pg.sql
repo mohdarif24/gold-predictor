@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS heartbeat(instrument TEXT PRIMARY KEY, ts TEXT);
 CREATE TABLE IF NOT EXISTS models(name TEXT PRIMARY KEY, blob BYTEA, meta TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS reports(instrument TEXT PRIMARY KEY, body TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS research(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
+CREATE TABLE IF NOT EXISTS scorecards(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
 CREATE TABLE IF NOT EXISTS explanations(instrument TEXT, horizon TEXT, body TEXT, updated TEXT, PRIMARY KEY(instrument, horizon));
 CREATE TABLE IF NOT EXISTS series(name TEXT, ts TEXT, value DOUBLE PRECISION, PRIMARY KEY(name, ts));
 CREATE TABLE IF NOT EXISTS news(

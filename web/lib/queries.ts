@@ -263,6 +263,28 @@ export async function hasAccessCode(run: Run, email: string): Promise<boolean> {
   return (await run("SELECT 1 FROM access_codes WHERE email = $1", [email])).length > 0;
 }
 
+/** The factor checklist per daily horizon, with the model's own tested accuracy next to it. */
+export async function getChecklist(run: Run, name: string) {
+  const inst = await requireInstrument(run, name);
+  const [cards, research] = await Promise.all([
+    run<{ horizon: string; body: string }>("SELECT horizon, body FROM scorecards WHERE instrument = $1", [name]),
+    run<{ horizon: string; body: string }>("SELECT horizon, body FROM research WHERE instrument = $1", [name]),
+  ]);
+  const card = new Map(cards.map((r) => [r.horizon, JSON.parse(r.body)]));
+  const study = new Map(research.map((r) => [r.horizon, JSON.parse(r.body)]));
+  return {
+    instrument: name,
+    horizons: inst.horizons.filter((h) => card.has(h)).map((h) => {
+      const hold = study.get(h)?.holdout;
+      return {
+        horizon: h,
+        card: card.get(h),
+        model: hold ? { name: study.get(h).selected?.model ?? null, accuracy: hold.accuracy ?? null, baseline: hold.baseline_accuracy ?? null, n: hold.n ?? null, has_edge: Boolean(hold.has_edge) } : null,
+      };
+    }),
+  };
+}
+
 export type AlertSettings = { telegram_on: boolean; telegram_chat_id: string | null; email_on: boolean };
 
 export async function getAlerts(run: Run, email: string): Promise<AlertSettings> {
