@@ -83,11 +83,14 @@ class Db:
             try:
                 cur = self.conn.cursor()
                 cur.execute(sql.replace("?", "%s"), params)
-            except psycopg.OperationalError:
-                # Neon closes connections left idle during long computations (the model study runs for hours). When
-                # nothing is pending, a fresh connection loses nothing, so reconnect once and repeat the statement.
-                # With uncommitted work the error must surface: silently dropping it would lose data.
-                if self._dirty or self._reconnect is None:
+            except psycopg.Error as e:
+                # Neon closes connections left idle during long computations (the model study runs for hours): as a
+                # dropped socket (OperationalError) or as "idle-in-transaction timeout" when a read had left a
+                # transaction open. When nothing is pending, a fresh connection loses nothing, so reconnect once and
+                # repeat the statement. With uncommitted work the error must surface: silently dropping it loses data.
+                gone = isinstance(e, (psycopg.OperationalError, psycopg.errors.IdleInTransactionSessionTimeout)) \
+                    or getattr(self.conn, "broken", False) or self.conn.closed
+                if not gone or self._dirty or self._reconnect is None:
                     raise
                 print("database connection was closed while idle; reconnecting", flush=True)
                 try:

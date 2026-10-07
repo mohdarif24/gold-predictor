@@ -152,6 +152,32 @@ def test_reconnects_after_an_idle_drop_but_never_loses_pending_writes():
     db.execute("UPDATE t SET x = 1")  # after a commit it is safe again
     assert len(opened) == 2 and opened[1].log == ["UPDATE t SET x = 1"]
 
+    # the other way Neon ends it: a read left a transaction open while the study computed
+    class Idle(Conn):
+        def cursor(self):
+            c = Cur(self)
+
+            def boom(sql, params):
+                raise psycopg.errors.IdleInTransactionSessionTimeout("terminating connection due to idle-in-transaction timeout")
+            c.execute = boom
+            return c
+
+    db3 = store.Db(Idle(), "postgres", reconnect=reconnect)
+    db3.execute("INSERT INTO research VALUES (%s)", (1,))  # nothing pending before it: reconnects and saves
+    assert opened[-1].log == ["INSERT INTO research VALUES (%s)"]
+
+    class Bad(Conn):  # an ordinary SQL error is not a lost connection: never retried
+        def cursor(self):
+            c = Cur(self)
+
+            def boom(sql, params):
+                raise psycopg.errors.UndefinedTable("no such table")
+            c.execute = boom
+            return c
+
+    with pytest.raises(psycopg.errors.UndefinedTable):
+        store.Db(Bad(), "postgres", reconnect=reconnect).execute("SELECT * FROM nope")
+
     db2 = store.Db(Conn(), "postgres", reconnect=lambda: Conn())
     db2.execute("INSERT INTO t VALUES (%s)", (1,))  # uncommitted write...
     db2.conn.dead = True
