@@ -74,7 +74,9 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
+      # npm install, not npm ci: a lockfile written on Windows lists some optional WebAssembly packages differently
+      # from Linux, and npm ci refuses that; npm install repairs it inside the runner (nothing is committed)
+      - run: npm install --no-audit --no-fund
       # the API address is baked into the static files; set the repository variable API_URL (Settings > Variables)
       - run: npm run build
         env:
