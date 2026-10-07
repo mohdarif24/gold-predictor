@@ -43,6 +43,7 @@ instruments:
 
   nse_etf:
     label: "Gold ETF (India, NSE)"
+    enabled: false          # switched off 2026-10-07: only global gold is used (set to true to bring it back)
     source: yfinance
     symbol: GOLDBEES.NS
     minutes_per_day: 375

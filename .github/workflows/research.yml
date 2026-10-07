@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        instrument: [xauusd_yf, nse_etf]
+        instrument: [xauusd_yf]   # add nse_etf back here if it is enabled again in config.yaml
     concurrency:
       group: research-${{ matrix.instrument }}
       cancel-in-progress: false
