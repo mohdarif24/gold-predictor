@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core import store  # noqa: E402
 
-TABLES = ["predictions", "shadow_trades", "heartbeat", "models", "reports", "research", "scorecards", "explanations", "series", "news", "events", "candles", "instruments", "user_settings", "access_codes"]
+TABLES = ["predictions", "shadow_trades", "heartbeat", "models", "reports", "research", "scorecards", "explanations", "series", "news", "events", "candles", "instruments", "user_settings", "access_codes", "app_settings", "api_logs"]
 
 
 @pytest.fixture(scope="session")

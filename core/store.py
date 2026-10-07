@@ -8,6 +8,7 @@ import io
 import json
 import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -102,7 +103,15 @@ def connect(target: str) -> Db:
 
         # prepare_threshold=None: Neon's pooled endpoint is PgBouncer in transaction mode, which cannot keep prepared
         # statements; this is psycopg's documented setting for that. (Not exercised by the local tests.)
-        db = Db(psycopg.connect(target, row_factory=dict_row, prepare_threshold=None), "postgres")
+        # A few retries cover a database that is waking up or still closing the previous connection.
+        for attempt in range(4):
+            try:
+                db = Db(psycopg.connect(target, row_factory=dict_row, prepare_threshold=None), "postgres")
+                break
+            except psycopg.OperationalError:
+                if attempt == 3:
+                    raise
+                time.sleep(1.5 * (attempt + 1))
     else:
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         # check_same_thread=False: connections are never shared between concurrent users of this module
