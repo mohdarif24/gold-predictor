@@ -218,6 +218,9 @@ export const MODEL_NAMES: Record<string, Text> = {
   ridge: { en: "Ridge logistic regression", bn: "রিজ লজিস্টিক রিগ্রেশন" },
   mlp: { en: "Small neural network", bn: "ছোট নিউরাল নেটওয়ার্ক" },
   lstm: { en: "LSTM neural network", bn: "LSTM নিউরাল নেটওয়ার্ক" },
+  lgbm_w: { en: "LightGBM, recent data weighted, up/down balanced", bn: "LightGBM, সাম্প্রতিক ডেটায় বেশি ওজন, বাড়া/কমা সমান" },
+  xgb_w: { en: "XGBoost, recent data weighted, up/down balanced", bn: "XGBoost, সাম্প্রতিক ডেটায় বেশি ওজন, বাড়া/কমা সমান" },
+  et_w: { en: "Extra-trees, recent data weighted, up/down balanced", bn: "এক্সট্রা-ট্রি, সাম্প্রতিক ডেটায় বেশি ওজন, বাড়া/কমা সমান" },
   blend: { en: "Average of five models", bn: "পাঁচ মডেলের গড়" },
   stack: { en: "Stacked ensemble of five models", bn: "পাঁচ মডেলের স্ট্যাকড ensemble" },
 };

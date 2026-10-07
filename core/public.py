@@ -5,8 +5,31 @@ direction); intraday horizons map the model's raw probability onto its hold-out 
 cases, the plain base rate is used instead. The API (api/src/lib/queries.ts getPublicSignal) mirrors this logic.
 """
 
+from datetime import datetime, timedelta, timezone
+
 MIN_CASES = 30
 LO, HI = 0.05, 0.95
+
+# Big US releases (CPI, jobs, Fed, PCE...) move gold in ways no input foresees: on US jobs-report days the daily model was
+# right only 40% of the time (2026-10 error analysis). Around them the client is shown "no clear direction" with a
+# warning instead of a lean. (hours before the event, hours after) per window; the weekly window always has events.
+EVENT_WINDOWS = {"30m": (2, 1), "1h": (2, 1), "1d": (24, 2)}
+
+
+def event_pause(db, horizon: str, now: datetime | None = None) -> dict | None:
+    """The high-impact US event that pauses this window right now, or None. Mirrored in api/src/lib/queries.ts."""
+    win = EVENT_WINDOWS.get(horizon)
+    if win is None or db is None:
+        return None
+    now = now or datetime.now(timezone.utc)
+    lo = (now - timedelta(hours=win[1])).isoformat(timespec="minutes")
+    hi = (now + timedelta(hours=win[0])).isoformat(timespec="minutes")
+    try:
+        row = db.execute("SELECT ts, title FROM events WHERE impact = 'high' AND country = 'USD' AND ts >= ? AND ts <= ? "
+                         "ORDER BY ts LIMIT 1", (lo, hi)).fetchone()
+    except Exception:  # the calendar is extra information; never block a prediction because of it
+        return None
+    return {"ts": row["ts"], "title": row["title"]} if row else None
 
 
 def chance_up(card: dict | None, study: dict | None, model_p_up: float | None) -> dict:

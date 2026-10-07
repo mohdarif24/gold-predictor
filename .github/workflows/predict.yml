@@ -2,9 +2,13 @@ name: predict
 
 # One pass: settle virtual trades, make fresh predictions, publish candles + heartbeat, send alerts.
 # GitHub's scheduler is best-effort: runs can start 5-15 minutes late and an occasional run is skipped.
+# Only while gold trades (Sunday 22:00 to Friday 21:00 UTC): nothing changes at the weekend, and skipping it saves about a
+# quarter of the database's free monthly compute.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/15 * * * 1-4"     # Monday to Thursday
+    - cron: "*/15 0-21 * * 5"    # Friday until the close
+    - cron: "*/15 22-23 * * 0"   # Sunday from the open
   workflow_dispatch:
 
 concurrency:
@@ -38,12 +42,22 @@ jobs:
       - uses: actions/cache@v4
         if: steps.gate.outputs.ok == 'true'
         with:
-          path: data
+          path: |
+            data
+            !data/dukascopy
           key: bars-${{ github.run_id }}
           restore-keys: bars-
+      # years of spot gold history (core/dukascopy.py), filled by the research and train jobs; kept separately
+      - uses: actions/cache@v4
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          path: data/dukascopy
+          key: duka-${{ github.run_id }}
+          restore-keys: duka-
       - run: python run.py all tick
         if: steps.gate.outputs.ok == 'true'
         env:
+          DUKASCOPY_MAX_DAYS: "15"   # at most this many missing days per run, so the run stays well inside its time limit
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}

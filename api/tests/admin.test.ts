@@ -128,6 +128,18 @@ describe("public signal", () => {
     expect(by["30m"]).toMatchObject({ p_up: 0.54, p_down: 0.46, source: "model_calibrated", cases: 200 });
     for (const x of s.signals) expect(x).not.toHaveProperty("model_p_up"); // clients never get the raw number
   });
+
+  it("shows no direction around big US news, with the event, for the short and daily windows only", async () => {
+    await insert("events", { id: "nfp", ts: "2026-10-09T12:30+00:00", country: "USD", title: "Non-Farm Employment Change", impact: "high" });
+    await insert("events", { id: "de", ts: "2026-10-09T11:00+00:00", country: "EUR", title: "German CPI", impact: "high" });
+    const s = await q.getPublicSignal(run, "gold", new Date("2026-10-09T11:00:00Z"));
+    const by = Object.fromEntries(s.signals.map((x) => [x.horizon, x]));
+    expect(by["30m"]).toMatchObject({ p_up: 0.5, p_down: 0.5, event: { title: "Non-Farm Employment Change" } });
+    expect(by["1d"].event?.title).toBe("Non-Farm Employment Change");
+    const later = await q.getPublicSignal(run, "gold", new Date("2026-10-10T12:00:00Z"));
+    expect(later.signals.every((x) => x.event === null)).toBe(true);
+    expect(Object.fromEntries(later.signals.map((x) => [x.horizon, x]))["1d"].p_up).toBe(0.4);
+  });
 });
 
 describe("prediction log", () => {

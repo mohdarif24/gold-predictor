@@ -170,7 +170,10 @@ export type ChecklistResponse = {
 export type PublicSignal = {
   instrument: string;
   label: string;
-  signals: { horizon: string; p_up: number; p_down: number; source: string; cases: number; as_of: string | null }[];
+  signals: {
+    horizon: string; p_up: number; p_down: number; source: string; cases: number; as_of: string | null;
+    event: { ts: string; title: string } | null;
+  }[];
 };
 
 export type AdminUser = { email: string; role: "admin" | "user"; perms: string[]; created: string | null; last_used: string | null };

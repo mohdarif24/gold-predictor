@@ -33,7 +33,7 @@ DEV_FOLDS, HOLD_FOLDS = 5, 4
 STAGE_A_SET = "tech+"
 STAGE_B_SETS = ["core", "macro", "flow", "all"]
 CONF_LEVELS = [1.0, 0.5, 0.25, 0.10]
-SINGLE_FOR_STAGE_B = ["lgbm", "xgb", "rf", "et", "logit", "ridge", "mlp", "lstm"]
+SINGLE_FOR_STAGE_B = ["lgbm", "xgb", "rf", "et", "logit", "ridge", "mlp", "lstm", "lgbm_w", "xgb_w", "et_w"]
 GATE = {"min_rows": 300, "auc_lo": 0.5, "acc_margin": 0.01, "min_trades": 30}
 
 

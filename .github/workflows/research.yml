@@ -40,9 +40,18 @@ jobs:
       - uses: actions/cache@v4
         if: steps.gate.outputs.ok == 'true'
         with:
-          path: data
-          key: bars-${{ github.run_id }}
+          path: |
+            data
+            !data/dukascopy
+          key: bars-${{ github.run_id }}-${{ matrix.instrument }}
           restore-keys: bars-
+      # spot gold history: every job restores it, only the gold job (which downloads it) saves it
+      - uses: actions/cache/restore@v4
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          path: data/dukascopy
+          key: duka-${{ github.run_id }}
+          restore-keys: duka-
       - run: python run.py ${{ matrix.instrument }} init-db
         if: steps.gate.outputs.ok == 'true'
         env:
@@ -55,3 +64,8 @@ jobs:
         if: steps.gate.outputs.ok == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - uses: actions/cache/save@v4
+        if: steps.gate.outputs.ok == 'true' && matrix.instrument == 'xauusd_yf' && always()
+        with:
+          path: data/dukascopy
+          key: duka-${{ github.run_id }}

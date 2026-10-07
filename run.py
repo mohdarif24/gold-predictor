@@ -5,6 +5,7 @@ GitHub Actions schedule runs. `all` means every enabled instrument that does not
 Set DATABASE_URL to use Postgres (Neon); otherwise the SQLite file from config.yaml is used.
 """
 import argparse
+import os
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -36,7 +37,26 @@ def providers(name: str, cfg: dict):
     if inst["source"] == "mt5":
         from xauusd import mt5_data
         return (lambda tf: mt5_data.get_bars(inst["symbol"], tf, inst["bars"][tf])), drivers
-    return (lambda tf: yf_data.get_bars(inst["symbol"], tf, cfg["data_dir"])), drivers
+    hist = inst.get("history")
+    if not hist:
+        return (lambda tf: yf_data.get_bars(inst["symbol"], tf, cfg["data_dir"])), drivers
+
+    # intraday bars: Yahoo's recent ~60 days, with years of Dukascopy history spliced in front (core/dukascopy.py)
+    from datetime import date, timedelta
+    from core import dukascopy
+
+    # DUKASCOPY_MAX_DAYS caps downloads per run (the 15-minute job sets it; training and research fetch everything)
+    cap = os.getenv("DUKASCOPY_MAX_DAYS")
+    minutes = lru_cache(maxsize=1)(lambda: dukascopy.load_minutes(
+        hist["symbol"], date.today() - timedelta(days=int(365 * hist.get("years", 3))), date.today(), cfg["data_dir"],
+        max_fetch=int(cap) if cap else None))
+
+    def bars(tf):
+        recent = yf_data.get_bars(inst["symbol"], tf, cfg["data_dir"])
+        if tf not in dukascopy.RULE:
+            return recent
+        return dukascopy.splice(recent, dukascopy.resample(minutes(), tf))
+    return bars, drivers
 
 
 def show(results: list):

@@ -117,6 +117,10 @@ def predict(name: str, cfg: dict, get_bars, get_drivers, db, get_cot=None, get_n
                 print(f"checklist skipped for {name} {hz['name']}: {e}", flush=True)
         # what clients are shown right now, kept with the reading so the log can score it later
         rec["shown_p_up"] = public.chance_up(card, store.load_research(db, name, hz["name"]), p_up)["p_up"]
+        pause = public.event_pause(db, hz["name"])
+        if pause:  # big US news inside this window: clients see "no clear direction" with a warning
+            rec["shown_p_up"] = 0.5
+            rec["event"] = f"{pause['title']} at {pause['ts']}"
         pid = store.log_prediction(db, rec)
         rec["is_new"] = pid is not None
         if rec["is_new"]:  # explain each new reading once; the screen shows the latest

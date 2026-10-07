@@ -26,5 +26,28 @@ def test_intraday_maps_model_probability_to_calibration():
     assert chance_up(None, None, 0.9) == {"p_up": 0.5, "source": "base_rate", "cases": 0}
 
 
+def test_big_us_news_pauses_the_short_windows(tmp_path):
+    from datetime import datetime, timezone
+
+    from core import store
+    from core.public import event_pause
+
+    db = store.connect(str(tmp_path / "t.db"))
+    rows = [("a", "2026-10-09T12:30+00:00", "USD", "Non-Farm Employment Change", "high"),
+            ("b", "2026-10-09T09:00+00:00", "EUR", "German CPI", "high"),
+            ("c", "2026-10-09T14:00+00:00", "USD", "Factory Orders", "medium")]
+    for r in rows:
+        db.execute("INSERT INTO events(id, ts, country, title, impact) VALUES(?,?,?,?,?)", r)
+    db.commit()
+    at = lambda h, m=0: datetime(2026, 10, 9, h, m, tzinfo=timezone.utc)  # noqa: E731
+    assert event_pause(db, "30m", at(11))["title"] == "Non-Farm Employment Change"  # 90 minutes before
+    assert event_pause(db, "1h", at(13, 15))["title"] == "Non-Farm Employment Change"  # 45 minutes after
+    assert event_pause(db, "30m", at(8)) is None  # too early; the German release does not count
+    assert event_pause(db, "1d", datetime(2026, 10, 8, 14, tzinfo=timezone.utc)) is not None  # within the next day
+    assert event_pause(db, "1w", at(12)) is None  # every week has events: the weekly view is never paused
+    assert event_pause(None, "30m") is None
+    db.close()
+
+
 def test_clamped():
     assert chance_up(_card("up", 0.99, 40), None, 0.5)["p_up"] == 0.95

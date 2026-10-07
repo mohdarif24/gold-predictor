@@ -56,6 +56,18 @@ def build(cfg: dict, db=None) -> dict:
                         "refresh": "every tick run, on the Windows PC only", "params": params
                         + [_p("bars per timeframe", inst.get("bars"), f"config.yaml > instruments.{key}.bars")]})
         else:
+            if inst.get("history"):
+                hist = inst["history"]
+                from . import dukascopy
+                src.append({"id": f"dukascopy:{key}", "group": "prices", "name": f"Dukascopy spot history: {inst['label']}",
+                            "url": dukascopy.URL.format(sym=hist["symbol"], y="{year}", m=0, d=0).replace("/00/00/", "/{month-1}/{day}/"),
+                            "method": "HTTP GET (LZMA-compressed 1-minute candles, one file per day)",
+                            "code": "core/dukascopy.py load_minutes(), splice()", "auth": "none (free)",
+                            "refresh": "new days as they are published; the 15-minute job fetches at most a few per run",
+                            "params": [_p("symbol", hist["symbol"], f"config.yaml > instruments.{key}.history.symbol"),
+                                       _p("years", hist.get("years", 3), f"config.yaml > instruments.{key}.history.years"),
+                                       _p("role", "backbone of all intraday bars; Yahoo adds only the newest hours, scaled to spot",
+                                          "core/dukascopy.py splice()")]})
             src.append({"id": f"yf:{key}", "group": "prices", "name": f"Yahoo Finance prices: {inst['label']}",
                         "url": YF_CHART.format(symbol=inst["symbol"]), "method": "yfinance Ticker.history()",
                         "code": "nse_etf/yf_data.py get_bars()", "auth": "none (free, unofficial)",

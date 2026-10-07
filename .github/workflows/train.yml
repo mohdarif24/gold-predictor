@@ -36,9 +36,17 @@ jobs:
       - uses: actions/cache@v4
         if: steps.gate.outputs.ok == 'true'
         with:
-          path: data
+          path: |
+            data
+            !data/dukascopy
           key: bars-${{ github.run_id }}
           restore-keys: bars-
+      - uses: actions/cache@v4   # spot gold history (core/dukascopy.py); training fills any missing days
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          path: data/dukascopy
+          key: duka-${{ github.run_id }}
+          restore-keys: duka-
       - run: python run.py all init-db
         if: steps.gate.outputs.ok == 'true'
         env:

@@ -282,6 +282,7 @@ const en = {
   "sig.lean.up": "More likely higher",
   "sig.lean.down": "More likely lower",
   "sig.basis": "Based on {n} similar past cases",
+  "sig.event": "Big US news: {title} at {time}. Around such releases gold can jump either way, so no direction is shown.",
   "sig.note": "These chances come from how often gold actually rose or fell in similar past situations. They are estimates, not promises. Gold is hard to predict, so most chances stay close to 50%.",
 
   "users.title": "Users",
@@ -655,6 +656,7 @@ const bn: Record<Key, string> = {
   "sig.lean.up": "বাড়ার সম্ভাবনা বেশি",
   "sig.lean.down": "কমার সম্ভাবনা বেশি",
   "sig.basis": "অতীতের {n}টি একই রকম পরিস্থিতির ভিত্তিতে",
+  "sig.event": "বড় মার্কিন খবর: {title}, {time}-এ। এমন খবরের আশেপাশে সোনা যেকোনো দিকে লাফ দিতে পারে, তাই কোনো দিক দেখানো হচ্ছে না।",
   "sig.note": "এই সম্ভাবনাগুলো এসেছে অতীতে একই রকম পরিস্থিতিতে সোনার দাম আসলে কতবার বেড়েছে বা কমেছে তা থেকে। এগুলো অনুমান, প্রতিশ্রুতি নয়। সোনার দাম আগে থেকে বলা কঠিন, তাই বেশিরভাগ সম্ভাবনা ৫০%-এর কাছাকাছি থাকে।",
 
   "users.title": "ব্যবহারকারী",

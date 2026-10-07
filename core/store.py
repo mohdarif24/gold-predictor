@@ -18,7 +18,7 @@ _DDL = """
 CREATE TABLE IF NOT EXISTS predictions(
   id {pk}, created TEXT, instrument TEXT, horizon TEXT, tf TEXT, steps INTEGER,
   bar_ts TEXT, price {real}, atr {real}, p_up {real}, signal TEXT, regime TEXT, has_edge INTEGER,
-  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT, shown_p_up {real}, outcome_price {real},
+  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT, shown_p_up {real}, outcome_price {real}, event TEXT,
   UNIQUE(instrument, horizon, bar_ts)
 );
 CREATE TABLE IF NOT EXISTS shadow_trades(
@@ -163,6 +163,7 @@ _ADDED_COLUMNS = [
     ("access_codes", "perms", "TEXT DEFAULT ''"),  # extra pages a client may see, comma separated (e.g. "logs")
     ("predictions", "shown_p_up", "{real}"),  # the chance clients were shown at that moment
     ("predictions", "outcome_price", "{real}"),  # the price when the outcome was known
+    ("predictions", "event", "TEXT"),  # big news that paused the client's signal for this reading
 ]
 
 
@@ -207,7 +208,7 @@ def now_iso() -> str:
 def log_prediction(db: Db, rec: dict):
     """Insert a prediction; returns its id, or None if this bar was already predicted."""
     cols = ["created", "instrument", "horizon", "tf", "steps", "bar_ts", "price", "atr", "p_up", "signal",
-            "regime", "has_edge", "model_version", "reason", "shown_p_up"]
+            "regime", "has_edge", "model_version", "reason", "shown_p_up", "event"]
     row = db.execute(
         f"INSERT INTO predictions({','.join(cols)}) VALUES({','.join('?' * len(cols))}) "
         "ON CONFLICT(instrument, horizon, bar_ts) DO NOTHING RETURNING id",

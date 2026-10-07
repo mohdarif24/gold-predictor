@@ -17,8 +17,10 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 SINGLE = ["lgbm", "xgb", "rf", "et", "logit", "ridge", "mlp", "lstm"]
+# the same trees, trained with recent rows counting more and up / down days counting equally (see Weighted)
+WEIGHTED = ["lgbm_w", "xgb_w", "et_w"]
 COMBINED = ["blend", "stack", "meta"]
-ALL_MODELS = SINGLE + COMBINED
+ALL_MODELS = SINGLE + WEIGHTED + COMBINED
 FAST_BASES = ["lgbm", "xgb", "rf", "et", "logit"]  # members of blend / stack (keeps training time bounded)
 
 
@@ -60,6 +62,8 @@ def make_model(name: str, seed: int = 42):
                                    n_iter_no_change=10, max_iter=300, random_state=seed))
     if name == "lstm":
         return LSTMClassifier(seed=seed)
+    if name.endswith("_w") and name[:-2] in SINGLE:
+        return Weighted(name[:-2], seed)
     if name == "blend":
         return Blend(FAST_BASES, seed)
     if name == "stack":
@@ -154,6 +158,44 @@ class LSTMClassifier:
         with torch.no_grad():
             p = torch.sigmoid(self.net_(torch.tensor(self._windows(self._arr(X)), dtype=torch.float32))).numpy()
         return np.column_stack([1 - p, p])
+
+
+# ----------------------------------------------------------------------------------------------- weighting
+def sample_weights(y, half_life_frac: float = 0.25) -> np.ndarray:
+    """Recency x class balance, mean 1.
+    Recency: a row's weight halves every `half_life_frac` of the training length, so the newest market counts most
+    (markets change character; the 2026-10 error analysis found a model stuck on an older pattern).
+    Balance: up and down rows count equally in total, which removes the lean towards whichever was more common (the daily
+    model said "higher" on 63% of days when gold rose on 54%)."""
+    y = np.asarray(y, dtype=int)
+    n = len(y)
+    age = np.arange(n)[::-1]
+    w = 0.5 ** (age / max(50.0, half_life_frac * n))
+    n1 = max(int(y.sum()), 1)
+    n0 = max(n - n1, 1)
+    w = w * np.where(y == 1, n / (2 * n1), n / (2 * n0))
+    return w / w.mean()
+
+
+class Weighted:
+    """A tree model trained with sample_weights(): a candidate in the study like any other, so it is only used if it wins
+    on the development data and then passes the locked hold-out."""
+
+    def __init__(self, base: str, seed: int = 42, half_life_frac: float = 0.25):
+        self.base, self.seed, self.half_life_frac = base, seed, half_life_frac
+
+    def fit(self, X, y):
+        self.model_ = make_model(self.base, self.seed)
+        w = sample_weights(y, self.half_life_frac)
+        if hasattr(self.model_, "steps"):  # a scikit-learn pipeline: the weight goes to its last step
+            self.model_.fit(X, y, **{f"{self.model_.steps[-1][0]}__sample_weight": w})
+        else:
+            self.model_.fit(X, y, sample_weight=w)
+        self.classes_ = np.array([0, 1])
+        return self
+
+    def predict_proba(self, X):
+        return self.model_.predict_proba(X)
 
 
 # ----------------------------------------------------------------------------------------------- combinations

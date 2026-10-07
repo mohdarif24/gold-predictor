@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS predictions(
   id BIGSERIAL PRIMARY KEY, created TEXT, instrument TEXT, horizon TEXT, tf TEXT, steps INTEGER,
   bar_ts TEXT, price DOUBLE PRECISION, atr DOUBLE PRECISION, p_up DOUBLE PRECISION, signal TEXT, regime TEXT, has_edge INTEGER,
-  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT, shown_p_up DOUBLE PRECISION, outcome_price DOUBLE PRECISION,
+  model_version TEXT, reason TEXT, outcome_up INTEGER, resolved_ts TEXT, shown_p_up DOUBLE PRECISION, outcome_price DOUBLE PRECISION, event TEXT,
   UNIQUE(instrument, horizon, bar_ts)
 );
 CREATE TABLE IF NOT EXISTS shadow_trades(

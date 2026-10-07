@@ -292,8 +292,22 @@ type Bin = { pred: number; actual: number; n: number };
  * past situations. Daily horizons use the factor checklist; intraday horizons use the model's hold-out calibration
  * (its raw probability is mapped to how often that probability came true). Never the model's own unchecked number.
  */
-export async function getPublicSignal(run: Run, name: string) {
+/** Hours before / after a high-impact US event during which a window shows "no clear direction" (mirrors core/public.py). */
+export const EVENT_WINDOWS: Record<string, [number, number]> = { "30m": [2, 1], "1h": [2, 1], "1d": [24, 2] };
+const isoMin = (d: Date) => d.toISOString().slice(0, 16) + "+00:00";
+
+export async function getPublicSignal(run: Run, name: string, now: Date = new Date()) {
   const inst = await requireInstrument(run, name);
+  const events = await run<{ ts: string; title: string }>(
+    "SELECT ts, title FROM events WHERE impact = 'high' AND country = 'USD' AND ts >= $1 AND ts <= $2 ORDER BY ts",
+    [isoMin(new Date(now.getTime() - 2 * 3600_000)), isoMin(new Date(now.getTime() + 24 * 3600_000))],
+  );
+  const pauseFor = (h: string) => {
+    const w = EVENT_WINDOWS[h];
+    if (!w) return null;
+    const lo = isoMin(new Date(now.getTime() - w[1] * 3600_000)), hi = isoMin(new Date(now.getTime() + w[0] * 3600_000));
+    return events.find((e) => e.ts >= lo && e.ts <= hi) ?? null;
+  };
   const [cards, research, preds] = await Promise.all([
     run<{ horizon: string; body: string }>("SELECT horizon, body FROM scorecards WHERE instrument = $1", [name]),
     run<{ horizon: string; body: string }>("SELECT horizon, body FROM research WHERE instrument = $1", [name]),
@@ -331,7 +345,12 @@ export async function getPublicSignal(run: Run, name: string) {
   return {
     instrument: name,
     label: inst.label,
-    signals: horizons.map((x) => ({ ...x, p_up: Math.round(Math.min(0.95, Math.max(0.05, x.p_up)) * 100) / 100, p_down: Math.round((1 - Math.min(0.95, Math.max(0.05, x.p_up))) * 100) / 100 })),
+    signals: horizons.map((x) => {
+      const event = pauseFor(x.horizon);
+      // big US news inside this window: no lean is shown, only the warning (the reading is logged as "no clear call")
+      const up = event ? 0.5 : Math.min(0.95, Math.max(0.05, x.p_up));
+      return { ...x, p_up: Math.round(up * 100) / 100, p_down: Math.round((1 - up) * 100) / 100, event };
+    }),
   };
 }
 

@@ -48,6 +48,11 @@ export default function SignalPage() {
                     <div className="bg-sell" style={{ width: `${down}%` }} />
                   </div>
                   <p className="font-medium">{t(leaning(up))}</p>
+                  {s.event ? (
+                    <p role="note" className="rounded-lg border border-wait bg-wait-soft p-2 text-sm">
+                      ⚠️ {t("sig.event", { title: s.event.title, time: num(fmtDateTime(s.event.ts, lang)) })}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted">
                     {s.cases ? t("sig.basis", { n: s.cases.toLocaleString("en-US") }) : null}
                     {s.cases && s.as_of ? " · " : null}
