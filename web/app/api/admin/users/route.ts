@@ -1,4 +1,5 @@
 import { hashCode } from "@/lib/access";
+import { cleanPerms, listUsers, setUserPerms } from "@/lib/admin";
 import { secured } from "@/lib/http";
 import { HttpError } from "@/lib/queries";
 
@@ -10,24 +11,29 @@ function newCode(): string {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const GET = secured(
-  async ({ run }) => run("SELECT email, role, created, last_used FROM access_codes ORDER BY role, email"),
-  { admin: true },
-);
+export const GET = secured(async ({ run }) => listUsers(run), { admin: true });
 
 /** Create a person (or give an existing person a new code). The code is returned once and never stored in plain text. */
 export const POST = secured(async ({ req, run }) => {
   const body = await req.json().catch(() => null);
   const email = String(body?.email ?? "").trim().toLowerCase();
   const role = body?.role === "admin" ? "admin" : "user";
+  const perms = cleanPerms(body?.perms);
   if (!EMAIL.test(email)) throw new HttpError(400, "enter a valid email");
   const code = newCode();
   await run(
-    "INSERT INTO access_codes(email, code_hash, created, role) VALUES($1, $2, $3, $4) " +
-      "ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash, created = excluded.created, last_used = NULL, role = excluded.role",
-    [email, await hashCode(code), new Date().toISOString().slice(0, 19) + "+00:00", role],
+    "INSERT INTO access_codes(email, code_hash, created, role, perms) VALUES($1, $2, $3, $4, $5) " +
+      "ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash, created = excluded.created, last_used = NULL, " +
+      "role = excluded.role, perms = excluded.perms",
+    [email, await hashCode(code), new Date().toISOString().slice(0, 19) + "+00:00", role, perms.join(",")],
   );
-  return { email, role, code };
+  return { email, role, perms, code };
+}, { admin: true });
+
+/** Change which extra pages a client may open (the switches on the Users page). */
+export const PATCH = secured(async ({ req, run }) => {
+  const body = await req.json().catch(() => null);
+  return setUserPerms(run, String(body?.email ?? ""), body?.perms);
 }, { admin: true });
 
 /** Take access away at once. You cannot remove yourself, so the site never ends up without an administrator by accident. */

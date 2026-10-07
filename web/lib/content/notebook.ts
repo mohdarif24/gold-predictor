@@ -33,6 +33,104 @@ export const MAP: { lane: T; tech: string; items: T[] }[] = [
   },
 ];
 
+/**
+ * Code flowcharts: each step is a real function, top to bottom in the order it runs. `calls` are the functions that
+ * step calls in turn (drawn side by side). `lib` is the library doing the heavy lifting.
+ */
+export type Step = { fn: string; file: string; lib?: string; what: T; calls?: { fn: string; file: string; lib?: string; what: T }[] };
+export type Flow = { id: string; title: T; trigger: T; steps: Step[] };
+
+export const FLOWS: Flow[] = [
+  {
+    id: "flow-predict",
+    title: t("Flow 1: how one prediction is made (every 15 minutes)", "ফ্লো ১: একটি প্রেডিকশন কীভাবে হয় (প্রতি ১৫ মিনিটে)"),
+    trigger: t("Started by GitHub Actions (.github/workflows/predict.yml) with: python run.py all tick", "GitHub Actions (.github/workflows/predict.yml) চালায়: python run.py all tick"),
+    steps: [
+      { fn: "main()", file: "run.py", lib: "argparse", what: t("Reads config.yaml, connects to the database, loops over every enabled instrument.", "config.yaml পড়ে, ডেটাবেসে যুক্ত হয়, প্রতিটি চালু ইন্সট্রুমেন্টে ঘোরে।"),
+        calls: [
+          { fn: "store.connect_cfg()", file: "core/store.py", lib: "psycopg / sqlite3", what: t("Neon if DATABASE_URL is set, else SQLite; creates missing tables.", "DATABASE_URL থাকলে Neon, না হলে SQLite; না থাকা টেবিল বানায়।") },
+          { fn: "store.sync_instruments()", file: "core/store.py", what: t("Copies the instrument list to the database for the website.", "ওয়েবসাইটের জন্য ইন্সট্রুমেন্ট-তালিকা ডেটাবেসে রাখে।") },
+        ] },
+      { fn: "run_command(\"tick\")", file: "run.py", what: t("One full cycle for one instrument.", "একটি ইন্সট্রুমেন্টের জন্য একটি পূর্ণ চক্র।") },
+      { fn: "pipeline.update()", file: "core/pipeline.py", lib: "pandas", what: t("First settle the past: did earlier readings and practice trades come true?", "আগে অতীত মেটানো: আগের পর্যবেক্ষণ ও অনুশীলন ট্রেড কি মিলেছে?"),
+        calls: [
+          { fn: "shadow.update_trades()", file: "core/shadow.py", what: t("Closes practice trades that hit stop or target.", "stop বা target ছোঁয়া অনুশীলন ট্রেড বন্ধ করে।") },
+          { fn: "shadow.resolve_predictions()", file: "core/shadow.py", what: t("Fills outcome_up and outcome_price, which marks the Prediction Log right or wrong.", "outcome_up ও outcome_price পূরণ করে, যা প্রেডিকশন লগে সঠিক/ভুল চিহ্ন দেয়।") },
+        ] },
+      { fn: "refresh_news_once()", file: "run.py", what: t("At most every 10 minutes: new headlines and calendar.", "সর্বোচ্চ প্রতি ১০ মিনিটে: নতুন শিরোনাম ও ক্যালেন্ডার।"),
+        calls: [
+          { fn: "news.refresh_news()", file: "core/news.py", lib: "urllib + xml", what: t("Google News RSS for six searches.", "ছয়টি খোঁজের Google News RSS।") },
+          { fn: "news.score_articles()", file: "core/news.py", what: t("settings.llm_config() → score_llm() (AI, logged by settings.log()) or score_rules() (keywords).", "settings.llm_config() → score_llm() (AI, settings.log() দিয়ে লগ) অথবা score_rules() (কীওয়ার্ড)।") },
+          { fn: "news.refresh_events()", file: "core/news.py", what: t("This week’s economic calendar.", "এই সপ্তাহের অর্থনৈতিক ক্যালেন্ডার।") },
+        ] },
+      { fn: "pipeline.predict()", file: "core/pipeline.py", what: t("For each window (30m, 1h, 1d, 1w) the steps below.", "প্রতিটি সময়সীমার (30m, 1h, 1d, 1w) জন্য নিচের ধাপগুলো।") },
+      { fn: "store.load_model()", file: "core/store.py", lib: "joblib", what: t("Loads the trained model chosen by the study, with its list of inputs.", "স্টাডিতে বাছাই করা প্রশিক্ষিত মডেল ও তার ইনপুট-তালিকা লোড করে।") },
+      { fn: "_features()", file: "core/pipeline.py", lib: "yfinance, httpx", what: t("Fetches every input.", "সব ইনপুট আনে।"),
+        calls: [
+          { fn: "yf_data.get_bars()", file: "nse_etf/yf_data.py", lib: "yfinance", what: t("Gold bars (or mt5_data.get_bars() for Exness).", "সোনার বার (Exness হলে mt5_data.get_bars())।") },
+          { fn: "yf_data.get_drivers()", file: "nse_etf/yf_data.py", lib: "yfinance", what: t("18 market series.", "১৮টি বাজার-সিরিজ।") },
+          { fn: "sources.load_fred()", file: "core/sources.py", lib: "httpx", what: t("6 FRED series.", "৬টি FRED সিরিজ।") },
+          { fn: "load_cot() → sources.cot_features()", file: "core/pipeline.py, core/sources.py", what: t("CFTC positioning.", "CFTC অবস্থান।") },
+          { fn: "news.news_features()", file: "core/news.py", what: t("Daily news mood.", "দৈনিক খবরের হাওয়া।") },
+        ] },
+      { fn: "features.build_features()", file: "core/features.py", lib: "pandas, numpy", what: t("Turns everything into ~150 columns, shifting each to the day it was public.", "সবকিছু ~১৫০টি কলামে রূপ দেয়, প্রতিটিকে প্রকাশের দিনে সরিয়ে।"),
+        calls: [
+          { fn: "_rsi(), atr(), htf_features()", file: "core/features.py", what: t("Chart indicators and the bigger timeframe.", "চার্ট-সূচক ও বড় টাইমফ্রেম।") },
+          { fn: "sources.calendar_features()", file: "core/sources.py", what: t("Jobs-report day, expiries, month end.", "চাকরির প্রতিবেদনের দিন, মেয়াদ শেষ, মাসের শেষ।") },
+          { fn: "regime.compute_regime()", file: "core/regime.py", what: t("Market-state label.", "বাজারের অবস্থা।") },
+        ] },
+      { fn: "model.predict_proba()", file: "core/models.py", lib: "LightGBM / XGBoost / scikit-learn / PyTorch", what: t("The model’s own chance that the price ends higher (the “model raw” number, admin only).", "দাম বাড়ার মডেলের নিজস্ব সম্ভাবনা (“মডেলের নিজস্ব” সংখ্যা, শুধু অ্যাডমিন)।") },
+      { fn: "signal.decide()", file: "core/signal.py", what: t("Buy / Sell / Wait: Wait unless the window passed the locked test.", "কিনুন / বেচুন / অপেক্ষা: লক করা পরীক্ষায় পাস না করলে অপেক্ষা।") },
+      { fn: "scorecard.build()", file: "core/scorecard.py", lib: "pandas", what: t("Daily windows: the 10-factor checklist and its measured hit rate; saved by store.save_scorecard().", "দৈনিক সময়সীমা: ১০-ফ্যাক্টরের চেকলিস্ট ও মাপা মিলের হার; store.save_scorecard() দিয়ে সংরক্ষণ।") },
+      { fn: "public.chance_up()", file: "core/public.py", what: t("The client’s %: checklist rate (daily) or the model number mapped through its calibration (intraday).", "গ্রাহকের %: চেকলিস্টের হার (দৈনিক) বা ক্যালিব্রেশনে মেলানো মডেলের সংখ্যা (ইন্ট্রাডে)।") },
+      { fn: "store.log_prediction()", file: "core/store.py", what: t("Writes the reading to the predictions table (with shown_p_up).", "পর্যবেক্ষণ predictions টেবিলে লেখে (shown_p_up সহ)।") },
+      { fn: "explain.explain()", file: "core/explain.py", what: t("Which input families pushed the chance up or down; saved by store.save_explanation().", "কোন ইনপুট-পরিবার সম্ভাবনা উপরে বা নিচে ঠেলেছে; store.save_explanation() দিয়ে সংরক্ষণ।") },
+      { fn: "shadow.open_trade() · alerts.notify_new()", file: "core/shadow.py, core/alerts.py", what: t("Practice trade for Buy/Sell; Telegram / email alerts.", "কিনুন/বেচুনে অনুশীলন ট্রেড; Telegram / ইমেইল অ্যালার্ট।") },
+      { fn: "store.save_candles() · save_series() · beat()", file: "core/store.py", what: t("Chart bars, input values and the “live” heartbeat for the website.", "ওয়েবসাইটের জন্য চার্টের বার, ইনপুটের মান ও “লাইভ” heartbeat।") },
+    ],
+  },
+  {
+    id: "flow-web",
+    title: t("Flow 2: how the website shows it", "ফ্লো ২: ওয়েবসাইট কীভাবে দেখায়"),
+    trigger: t("A person opens the site (Next.js on Cloudflare Workers).", "কেউ সাইট খোলেন (Cloudflare Workers-এ Next.js)।"),
+    steps: [
+      { fn: "SignalPage → useApi(\"public/…\")", file: "web/app/(app)/page.tsx, web/lib/api.ts", lib: "React", what: t("The page asks the server for the client signal; it refreshes every 2 minutes.", "পাতা সার্ভারের কাছে গ্রাহকের সংকেত চায়; প্রতি ২ মিনিটে হালনাগাদ।") },
+      { fn: "GET /api/public/[name]", file: "web/app/api/public/[name]/route.ts", lib: "Next.js route handler", what: t("Server endpoint.", "সার্ভার এন্ডপয়েন্ট।") },
+      { fn: "secured()", file: "web/lib/http.ts", lib: "jose", what: t("Checks sign-in and role on every request.", "প্রতিটি অনুরোধে সাইন-ইন ও ভূমিকা যাচাই।"),
+        calls: [
+          { fn: "access.caller()", file: "web/lib/access.ts", lib: "jose (HS256)", what: t("Verifies the session cookie (or Cloudflare Access token).", "সেশন কুকি (বা Cloudflare Access টোকেন) যাচাই।") },
+          { fn: "queries.accessOf()", file: "web/lib/queries.ts", what: t("Re-reads role and extra pages; admin-only routes return 403 to clients.", "ভূমিকা ও বাড়তি পাতা আবার পড়ে; অ্যাডমিন রুট গ্রাহককে 403 দেয়।") },
+        ] },
+      { fn: "queries.getPublicSignal()", file: "web/lib/queries.ts", what: t("Reads scorecards, research and the latest predictions; returns only “higher X% / lower Y%”.", "scorecards, research ও সর্বশেষ predictions পড়ে; শুধু “বাড়বে X% / কমবে Y%” ফেরত দেয়।") },
+      { fn: "db.run() → neon().query()", file: "web/lib/db.ts", lib: "@neondatabase/serverless", what: t("SQL over HTTPS to Neon Postgres.", "HTTPS-এ Neon Postgres-এ SQL।") },
+      { fn: "Card per window", file: "web/app/(app)/page.tsx", lib: "Tailwind CSS", what: t("Green / red bar and plain words in English or Bengali (web/lib/i18n.tsx).", "সবুজ / লাল বার ও ইংরেজি বা বাংলায় সহজ কথা (web/lib/i18n.tsx)।") },
+    ],
+  },
+  {
+    id: "flow-train",
+    title: t("Flow 3: how the model is chosen and trained", "ফ্লো ৩: মডেল কীভাবে বাছাই ও প্রশিক্ষণ হয়"),
+    trigger: t("research.yml on the 1st of each month (python -m research.study all), then train.yml every Sunday (python run.py all train).", "প্রতি মাসের ১ তারিখে research.yml (python -m research.study all), তারপর প্রতি রবিবার train.yml (python run.py all train)।"),
+    steps: [
+      { fn: "study.main() → study_horizon()", file: "research/study.py", what: t("Per instrument and window: builds features and the target, splits 80% / 20%.", "প্রতি ইন্সট্রুমেন্ট ও সময়সীমায়: বৈশিষ্ট্য ও লক্ষ্য বানায়, ৮০% / ২০% ভাগ করে।"),
+        calls: [
+          { fn: "features.build_features()", file: "core/features.py", what: t("Same inputs as live.", "লাইভের মতো একই ইনপুট।") },
+          { fn: "features.make_target()", file: "core/features.py", what: t("1 if the price ended higher.", "দাম বাড়লে ১।") },
+        ] },
+      { fn: "dev_score() × ≈18", file: "research/study.py", lib: "scikit-learn (roc_auc_score)", what: t("Stage A: every model; stage B: best two on 4 more input sets. Scored by AUC on the first 80% only.", "ধাপ A: সব মডেল; ধাপ B: সেরা দুটি আরও ৪টি ইনপুট-সেটে। শুধু প্রথম ৮০%-এ AUC দিয়ে নম্বর।"),
+        calls: [
+          { fn: "features.select_columns()", file: "core/features.py", what: t("Picks an input set (core, tech+, macro, flow, all).", "ইনপুট-সেট বাছে (core, tech+, macro, flow, all)।") },
+          { fn: "backtest.walk_forward()", file: "core/backtest.py", what: t("Train on the past, purge gap, test the next block.", "অতীতে শেখা, purge gap, পরের অংশে পরীক্ষা।") },
+          { fn: "models.fit() → make_model()", file: "core/models.py", lib: "LightGBM, XGBoost, scikit-learn, PyTorch", what: t("Builds and trains one candidate.", "একটি প্রার্থী বানিয়ে শেখায়।") },
+        ] },
+      { fn: "walk_forward() on the locked 20%", file: "core/backtest.py", what: t("The single winner, tested once on data no choice touched.", "একমাত্র বিজয়ী, এমন তথ্যে একবার পরীক্ষা যা কোনো বাছাইয়ে ব্যবহার হয়নি।") },
+      { fn: "backtest.evaluate() · stats.block_bootstrap_auc()", file: "core/backtest.py, core/stats.py", lib: "numpy, scikit-learn", what: t("Accuracy, AUC with 95% range, calibration, return after costs, Sharpe, trades.", "সঠিকতা, ৯৫% পরিসরসহ AUC, ক্যালিব্রেশন, খরচের পরে লাভ, Sharpe, ট্রেড।") },
+      { fn: "GATE checks → has_edge", file: "research/study.py", what: t("All five must pass, or the window stays on Wait.", "পাঁচটিই পাস করতে হবে, না হলে সময়সীমা অপেক্ষায় থাকে।") },
+      { fn: "store.save_research()", file: "core/store.py", what: t("Stores the choice, the hold-out result and the calibration table.", "বাছাই, hold-out ফল ও ক্যালিব্রেশন সারণি সংরক্ষণ করে।") },
+      { fn: "pipeline.train()", file: "core/pipeline.py", what: t("Weekly: store.load_research() → select_columns() → models.fit() on all data → store.save_model().", "সাপ্তাহিক: store.load_research() → select_columns() → সব তথ্যে models.fit() → store.save_model()।") },
+    ],
+  },
+];
+
 export const SECTIONS: Section[] = [
   {
     id: "python",
@@ -165,6 +263,7 @@ export const SECTIONS: Section[] = [
     title: t("Security and control", "নিরাপত্তা ও নিয়ন্ত্রণ"),
     entries: [
       { name: "Roles", what: t("user: Signal, Alerts, How it works. admin (super admin): everything, including Users, Model API and API Logs.", "user: সংকেত, অ্যালার্ট, কীভাবে কাজ করে। admin (সুপার অ্যাডমিন): সবকিছু, ব্যবহারকারী, মডেল API ও API লগসহ।"), why: t("Clients get a simple answer; the owner keeps full control.", "গ্রাহক সহজ উত্তর পান; মালিকের হাতে পুরো নিয়ন্ত্রণ।") },
+      { name: "Per-client pages (perms)", where: "access_codes.perms, secured({ perm })", what: t("The super admin can open extra pages to one client from the Users page; today: Prediction Logs. A client sees only the readings they were shown, never the model’s own number.", "সুপার অ্যাডমিন ব্যবহারকারী পাতা থেকে একজন গ্রাহকের জন্য বাড়তি পাতা খুলে দিতে পারেন; এখন: প্রেডিকশন লগ। গ্রাহক শুধু তাঁকে দেখানো পর্যবেক্ষণ দেখেন, মডেলের নিজস্ব সংখ্যা কখনো নয়।"), why: t("Transparency for clients who want proof, without exposing internals.", "যে গ্রাহক প্রমাণ চান তাঁর জন্য স্বচ্ছতা, ভেতরের খুঁটিনাটি না দেখিয়ে।") },
       { name: "No secrets in code", what: t("Keys live in GitHub secrets, Cloudflare secrets or (encrypted) in the database. The repository is public and clean.", "কী থাকে GitHub secret, Cloudflare secret বা (এনক্রিপ্টেড) ডেটাবেসে। রিপোজিটরি পাবলিক ও পরিষ্কার।"), why: t("Open source without leaking access.", "প্রবেশাধিকার ফাঁস না করে ওপেন সোর্স।") },
       { name: "SETTINGS_KEY", what: t("Shared secret that encrypts the AI key on the website and decrypts it in the Python job.", "যে গোপন চাবি ওয়েবসাইটে AI কী এনক্রিপ্ট করে এবং Python কাজে ডিক্রিপ্ট করে।"), why: t("A database leak alone does not reveal the AI key.", "শুধু ডেটাবেস ফাঁস হলে AI কী প্রকাশ পায় না।") },
     ],

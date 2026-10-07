@@ -12,6 +12,7 @@ function UsersInner() {
   const list = useApi<AdminUser[]>("admin/users");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
+  const [logs, setLogs] = useState(false);
   const [made, setMade] = useState<{ email: string; code: string } | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,13 +25,24 @@ function UsersInner() {
     setErr("");
     setMade(null);
     try {
-      setMade(await apiFetch<{ email: string; code: string }>("admin/users", { method: "POST", body: JSON.stringify({ email, role }) }));
+      setMade(await apiFetch<{ email: string; code: string }>("admin/users", { method: "POST", body: JSON.stringify({ email, role, perms: logs ? ["logs"] : [] }) }));
       setEmail("");
       list.reload();
     } catch (ex) {
       fail(ex);
     }
     setBusy(false);
+  }
+
+  async function setPerm(u: AdminUser, perm: string, on: boolean) {
+    setErr("");
+    const perms = on ? [...new Set([...u.perms, perm])] : u.perms.filter((p) => p !== perm);
+    try {
+      await apiFetch("admin/users", { method: "PATCH", body: JSON.stringify({ email: u.email, perms }) });
+      list.reload();
+    } catch (ex) {
+      fail(ex);
+    }
   }
 
   async function revoke(who: string) {
@@ -62,6 +74,12 @@ function UsersInner() {
           <button type="submit" disabled={busy} className="rounded-lg bg-brass px-4 py-2 font-semibold text-bg disabled:opacity-60">
             {t("users.add")}
           </button>
+          {role === "user" ? (
+            <label className="flex basis-full items-center gap-2 text-sm">
+              <input type="checkbox" checked={logs} onChange={(e) => setLogs(e.target.checked)} className="h-4 w-4" />
+              {t("users.perm.logs")}
+            </label>
+          ) : null}
         </form>
         {made ? (
           <div role="status" className="mt-4 rounded-lg border border-buy bg-buy-soft p-3 text-sm">
@@ -84,11 +102,12 @@ function UsersInner() {
       {list.data ? (
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[34rem] text-sm">
+            <table className="w-full min-w-[40rem] text-sm">
               <thead className="text-left text-muted">
                 <tr className="border-b border-line">
                   <th className="px-5 py-3 font-medium">{t("login.email")}</th>
                   <th className="px-5 py-3 font-medium">{t("users.role")}</th>
+                  <th className="px-5 py-3 font-medium">{t("nav.logs")}</th>
                   <th className="px-5 py-3 font-medium">{t("users.lastused")}</th>
                   <th className="px-5 py-3" />
                 </tr>
@@ -99,6 +118,17 @@ function UsersInner() {
                     <td className="px-5 py-3 break-all">{u.email}</td>
                     <td className={`px-5 py-3 ${u.role === "admin" ? "font-semibold text-brass" : ""}`}>
                       {u.role === "admin" ? t("users.role.admin") : t("users.role.user")}
+                    </td>
+                    <td className="px-5 py-3">
+                      {u.role === "admin" ? (
+                        <span className="text-xs text-muted">{t("users.perm.always")}</span>
+                      ) : (
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={u.perms.includes("logs")} onChange={(e) => setPerm(u, "logs", e.target.checked)}
+                            className="h-4 w-4" aria-label={`${t("users.perm.logs")}: ${u.email}`} />
+                          <span className="text-xs">{u.perms.includes("logs") ? t("users.perm.on") : t("users.perm.off")}</span>
+                        </label>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-muted">{u.last_used ? num(fmtDateTime(u.last_used, lang)) : "-"}</td>
                     <td className="px-5 py-3 text-right">

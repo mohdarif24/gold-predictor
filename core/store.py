@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS candles(
   PRIMARY KEY(instrument, tf, ts)
 );
 CREATE TABLE IF NOT EXISTS instruments(id TEXT PRIMARY KEY, label TEXT, horizons TEXT, enabled INTEGER, sort INTEGER);
-CREATE TABLE IF NOT EXISTS access_codes(email TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, created TEXT, last_used TEXT, role TEXT DEFAULT 'user');
+CREATE TABLE IF NOT EXISTS access_codes(
+  email TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, created TEXT, last_used TEXT, role TEXT DEFAULT 'user',
+  perms TEXT DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS user_settings(
   email TEXT PRIMARY KEY, telegram_chat_id TEXT, telegram_on INTEGER DEFAULT 0, email_on INTEGER DEFAULT 0
 );
@@ -123,6 +126,7 @@ def schema_sql(kind: str) -> str:
 # Columns added after a table first shipped: (table, column, definition). Existing databases get them on connect.
 _ADDED_COLUMNS = [
     ("access_codes", "role", "TEXT DEFAULT 'user'"),
+    ("access_codes", "perms", "TEXT DEFAULT ''"),  # extra pages a client may see, comma separated (e.g. "logs")
     ("predictions", "shown_p_up", "{real}"),  # the chance clients were shown at that moment
     ("predictions", "outcome_price", "{real}"),  # the price when the outcome was known
 ]

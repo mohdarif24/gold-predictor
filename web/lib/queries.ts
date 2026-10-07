@@ -263,11 +263,24 @@ export async function hasAccessCode(run: Run, email: string): Promise<boolean> {
   return (await roleOf(run, email)) !== null;
 }
 
+/** Extra pages the super admin can open to a client, one switch each on the Users page. */
+export const PERMS = ["logs"] as const;
+export type Perm = (typeof PERMS)[number];
+
+export function parsePerms(s: string | null | undefined): Perm[] {
+  return (s ?? "").split(",").map((p) => p.trim()).filter((p): p is Perm => (PERMS as readonly string[]).includes(p));
+}
+
+/** Role and extra pages, or null when the person has no (or a revoked) access code. */
+export async function accessOf(run: Run, email: string): Promise<{ role: "admin" | "user"; perms: Perm[] } | null> {
+  const rows = await run<{ role: string | null; perms: string | null }>("SELECT role, perms FROM access_codes WHERE email = $1", [email]);
+  if (!rows.length) return null;
+  return { role: rows[0].role === "admin" ? "admin" : "user", perms: parsePerms(rows[0].perms) };
+}
+
 /** "admin", "user", or null when the person has no (or a revoked) access code. */
 export async function roleOf(run: Run, email: string): Promise<"admin" | "user" | null> {
-  const rows = await run<{ role: string | null }>("SELECT role FROM access_codes WHERE email = $1", [email]);
-  if (!rows.length) return null;
-  return rows[0].role === "admin" ? "admin" : "user";
+  return (await accessOf(run, email))?.role ?? null;
 }
 
 const MIN_CASES = 30; // below this, a measured rate is too noisy to show to clients
@@ -342,14 +355,17 @@ const STATUS =
  * and one status. Counts cover every reading; the list shows the newest `limit`.
  */
 export async function getPredictionLog(
-  run: Run, name: string, opts: { horizon?: string | null; period?: string | null; status?: string | null; limit?: number } = {},
+  run: Run, name: string,
+  opts: { horizon?: string | null; period?: string | null; status?: string | null; limit?: number; client?: boolean } = {},
 ) {
   const inst = await requireInstrument(run, name);
   const horizon = opts.horizon && inst.horizons.includes(opts.horizon) ? opts.horizon : null;
   const period: LogPeriod = LOG_PERIODS.includes(opts.period as LogPeriod) ? (opts.period as LogPeriod) : "day";
   const status = ["right", "wrong", "pending", "nocall"].includes(opts.status ?? "") ? opts.status! : null;
   const n = Math.max(1, Math.min(Number.isFinite(opts.limit) ? opts.limit! : 100, 500));
-  const base = `FROM predictions WHERE instrument = $1 AND ($2::text IS NULL OR horizon = $2)`;
+  // A client sees only readings whose chance was really shown to clients, and never the model's own number.
+  const shown = opts.client ? " AND shown_p_up IS NOT NULL" : "";
+  const base = `FROM predictions WHERE instrument = $1 AND ($2::text IS NULL OR horizon = $2)${shown}`;
   const counts =
     "COUNT(*) FILTER (WHERE s = 'right')::int AS right_n, COUNT(*) FILTER (WHERE s = 'wrong')::int AS wrong_n, " +
     "COUNT(*) FILTER (WHERE s = 'pending')::int AS pending_n, COUNT(*) FILTER (WHERE s = 'nocall')::int AS nocall_n";
@@ -367,8 +383,10 @@ export async function getPredictionLog(
     const right = Number(r.right_n), wrong = Number(r.wrong_n);
     return { right, wrong, pending: Number(r.pending_n), nocall: Number(r.nocall_n), accuracy: right + wrong ? right / (right + wrong) : null };
   };
+  const CLIENT_COLS = ["id", "created", "horizon", "bar_ts", "price", "said", "outcome_up", "outcome_price", "resolved_ts", "status"];
   return {
-    instrument: name, horizon, period, rows,
+    instrument: name, horizon, period,
+    rows: opts.client ? rows.map((r) => Object.fromEntries(CLIENT_COLS.map((c) => [c, r[c]]))) : rows,
     buckets: buckets.map((b) => ({ period: b.period as string, ...shape(b) })),
     total: shape(total[0] ?? {}),
   };

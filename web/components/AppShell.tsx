@@ -56,7 +56,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const { list, current, select } = useInstrument();
   const { data: me } = useMe();
-  const nav = me?.role === "admin" ? ADMIN_NAV : USER_NAV;
+  const nav =
+    me?.role === "admin"
+      ? ADMIN_NAV
+      : me?.perms?.includes("logs")
+        ? [USER_NAV[0], { href: "/logs", key: "nav.logs" as Key }, ...USER_NAV.slice(1)]
+        : USER_NAV;
 
   return (
     <div className="flex min-h-screen flex-col">

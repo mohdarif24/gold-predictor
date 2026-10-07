@@ -7,6 +7,7 @@ import { type LogStatus, type PredictionLog, useApi } from "@/lib/api";
 import { fmtDateTime, pct, price } from "@/lib/format";
 import { type Key, useT } from "@/lib/i18n";
 import { useInstrument } from "@/lib/instrument";
+import { useMe } from "@/lib/role";
 
 const PERIODS = ["day", "week", "month", "year"] as const;
 const STATUSES: LogStatus[] = ["right", "wrong", "pending", "nocall"];
@@ -33,6 +34,7 @@ function Toggle<T extends string>({ value, options, label, onChange }: { value: 
 function LogsInner() {
   const { t, lang, num } = useT();
   const { current } = useInstrument();
+  const admin = useMe().data?.role === "admin"; // clients get no model numbers, so that column is admin-only
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>("day");
   const [horizon, setHorizon] = useState("");
   const [status, setStatus] = useState<"" | LogStatus>("");
@@ -130,7 +132,7 @@ function LogsInner() {
                 <table className="w-full min-w-[52rem] text-sm">
                   <thead className="text-left text-muted">
                     <tr className="border-y border-line">
-                      {(["log.col.time", "log.col.window", "log.col.said", "log.col.model", "log.col.price", "log.col.status"] as Key[]).map((k) => (
+                      {(["log.col.time", "log.col.window", "log.col.said", ...(admin ? ["log.col.model"] : []), "log.col.price", "log.col.status"] as Key[]).map((k) => (
                         <th key={k} className="px-4 py-2 font-medium">{t(k)}</th>
                       ))}
                     </tr>
@@ -143,7 +145,7 @@ function LogsInner() {
                           <td className="px-4 py-2.5 whitespace-nowrap">{num(fmtDateTime(r.created, lang))}</td>
                           <td className="px-4 py-2.5 whitespace-nowrap">{t(`h.${r.horizon}` as Key)}</td>
                           <td className="px-4 py-2.5 whitespace-nowrap font-medium">{num(said(r.said))}</td>
-                          <td className="px-4 py-2.5 text-muted tabular-nums">{num(pct(r.p_up, 1))}</td>
+                          {admin ? <td className="px-4 py-2.5 text-muted tabular-nums">{num(pct(r.p_up, 1))}</td> : null}
                           <td className="px-4 py-2.5 whitespace-nowrap tabular-nums">
                             {num(price(r.price))} →{" "}
                             {r.outcome_price === null ? (
@@ -163,7 +165,7 @@ function LogsInner() {
               </div>
             )}
           </Card>
-          <p className="rounded-xl border border-line bg-brass-soft p-4 text-sm">{t("log.note")}</p>
+          <p className="rounded-xl border border-line bg-brass-soft p-4 text-sm">{t(admin ? "log.note" : "log.note.client")}</p>
         </>
       ) : null}
     </div>
@@ -172,7 +174,7 @@ function LogsInner() {
 
 export default function LogsPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="logs">
       <LogsInner />
     </AdminOnly>
   );

@@ -2,12 +2,33 @@
  * What only the site administrator can see and change: the LLM provider used for news scoring, and the log of every
  * outside API call (written here for test calls and by core/settings.py for the scheduled jobs).
  */
-import { HttpError, type Run } from "./queries";
+import { HttpError, PERMS, type Perm, type Run, parsePerms } from "./queries";
 import { decrypt, encrypt, encryptionReady } from "./secret";
 
 export const DEFAULT_LLM = { url: "https://models.github.ai/inference/chat/completions", model: "openai/gpt-4o-mini" };
 const CLIP = 4000;
 const nowIso = () => new Date().toISOString().slice(0, 19) + "+00:00";
+
+export async function listUsers(run: Run) {
+  const rows = await run<{ email: string; role: string; perms: string | null; created: string | null; last_used: string | null }>(
+    "SELECT email, role, perms, created, last_used FROM access_codes ORDER BY role, email",
+  );
+  return rows.map((r) => ({ ...r, role: r.role === "admin" ? "admin" : "user", perms: parsePerms(r.perms) }));
+}
+
+/** Keep only known page names, in a fixed order, so the stored text stays tidy. */
+export function cleanPerms(v: unknown): Perm[] {
+  const asked = Array.isArray(v) ? v.map(String) : [];
+  return PERMS.filter((p) => asked.includes(p));
+}
+
+/** Turn a client's extra pages on or off without giving them a new code. */
+export async function setUserPerms(run: Run, email: string, perms: unknown) {
+  const clean = cleanPerms(perms);
+  const rows = await run("UPDATE access_codes SET perms = $2 WHERE email = $1 RETURNING email", [email.trim().toLowerCase(), clean.join(",")]);
+  if (!rows.length) throw new HttpError(404, "no such person");
+  return { email: email.trim().toLowerCase(), perms: clean };
+}
 
 async function settingsMap(run: Run) {
   const rows = await run<{ name: string; value: string; updated: string; updated_by: string }>(

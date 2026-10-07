@@ -59,6 +59,17 @@ describe("roles", () => {
     expect(await q.roleOf(run, "old@x.com")).toBe("user");
     expect(await q.roleOf(run, "nobody@x.com")).toBeNull();
   });
+
+  it("switches a client's extra pages on and off, ignoring unknown names", async () => {
+    expect(await q.accessOf(run, "client@x.com")).toEqual({ role: "user", perms: [] });
+    expect(await admin.setUserPerms(run, "Client@x.com ", ["logs", "everything", "logs"])).toEqual({ email: "client@x.com", perms: ["logs"] });
+    expect(await q.accessOf(run, "client@x.com")).toEqual({ role: "user", perms: ["logs"] });
+    expect((await admin.listUsers(run)).find((u) => u.email === "client@x.com")?.perms).toEqual(["logs"]);
+    await admin.setUserPerms(run, "client@x.com", []);
+    expect((await q.accessOf(run, "client@x.com"))?.perms).toEqual([]);
+    await expect(admin.setUserPerms(run, "nobody@x.com", ["logs"])).rejects.toMatchObject({ status: 404 });
+    expect(q.parsePerms(" logs ,admin,")).toEqual(["logs"]);
+  });
 });
 
 describe("public signal", () => {
@@ -91,6 +102,16 @@ describe("prediction log", () => {
     const wrong = await q.getPredictionLog(run, "gold", { status: "wrong" });
     expect(wrong.rows.map((r) => r.bar_ts)).toEqual(["b"]);
     expect(wrong.total.right).toBe(2); // counts are not narrowed by the status filter
+  });
+
+  it("gives clients only readings they were shown, without the model's own number", async () => {
+    const log = await q.getPredictionLog(run, "gold", { client: true });
+    expect(log.rows.map((r) => r.bar_ts)).toEqual(["d", "c", "b", "a"]);
+    expect(log.total).toEqual({ right: 1, wrong: 1, pending: 1, nocall: 1, accuracy: 0.5 });
+    for (const r of log.rows) {
+      for (const hidden of ["p_up", "shown_p_up", "signal", "regime", "has_edge"]) expect(r).not.toHaveProperty(hidden);
+      expect(r).toHaveProperty("said");
+    }
   });
 
   it("ignores unknown options instead of failing", async () => {

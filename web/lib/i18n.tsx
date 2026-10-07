@@ -294,6 +294,11 @@ const en = {
   "users.once": "Send this code privately. It is shown only once; if it is lost, create a new one.",
   "users.lastused": "Last sign-in",
   "users.revoke": "Remove access",
+  "users.perm.logs": "Can see Prediction Logs",
+  "users.perm.on": "Can see",
+  "users.perm.off": "Hidden",
+  "users.perm.always": "Always (super admin)",
+  "log.note.client": "“Said” is the chance you were shown on the Signal page. A reading between 47% and 53% was shown as “no clear direction”, so it counts as neither right nor wrong. The right rate is right ÷ (right + wrong). Past results do not guarantee future results.",
 
   "log.title": "Prediction Logs",
   "log.sub": "Every reading, what it said, and whether it came true. Refreshes every minute.",
@@ -657,6 +662,11 @@ const bn: Record<Key, string> = {
   "users.once": "কোডটি গোপনে পাঠান। এটি একবারই দেখানো হয়; হারালে নতুন একটি তৈরি করুন।",
   "users.lastused": "শেষ সাইন-ইন",
   "users.revoke": "প্রবেশাধিকার বাতিল",
+  "users.perm.logs": "প্রেডিকশন লগ দেখতে পারবে",
+  "users.perm.on": "দেখতে পারে",
+  "users.perm.off": "লুকানো",
+  "users.perm.always": "সবসময় (সুপার অ্যাডমিন)",
+  "log.note.client": "“যা বলেছিল” হলো সংকেত পাতায় আপনাকে দেখানো সম্ভাবনা। ৪৭% থেকে ৫৩%-এর মধ্যে হলে “স্পষ্ট দিক নেই” দেখানো হয়েছিল, তাই সেটি সঠিক বা ভুল কোনোটাই ধরা হয় না। সঠিকের হার = সঠিক ÷ (সঠিক + ভুল)। অতীতের ফল ভবিষ্যতের নিশ্চয়তা দেয় না।",
 
   "log.title": "প্রেডিকশন লগ",
   "log.sub": "প্রতিটি পর্যবেক্ষণ, তাতে কী বলা হয়েছিল, এবং তা মিলেছে কি না। প্রতি মিনিটে হালনাগাদ হয়।",

@@ -79,6 +79,8 @@ that the code still exists. If Cloudflare Access is also configured, either way 
 log, checklist, drivers, news, results, model explanation, notebook, Model API, API logs) and manages people on the **Users** page.
 Make the first super admin with `python scripts/access_code.py add you@example.com --admin`; after that, add people from the
 website. With Cloudflare Access, list super admins in the Worker variable `ADMIN_EMAILS` (comma separated).
+On the Users page you can also tick **Prediction Logs** for a client: they then see the log of the chances they were shown
+and whether each came true (never the model's own numbers).
 
 ## 4. News reading with an AI model (optional)
 Without a key, headlines are read by keyword rules (always works, less subtle). To use an AI model set `LLM_API_KEY` to a key from any
