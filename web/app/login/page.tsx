@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { LangToggle } from "@/components/AppShell";
+import { apiRequest } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
 export default function LoginPage() {
@@ -14,7 +15,7 @@ export default function LoginPage() {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const res = await apiRequest("login", { method: "POST", body: JSON.stringify({ code }) });
       if (res.ok) {
         // full reload on purpose: drops any state from the old session
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination

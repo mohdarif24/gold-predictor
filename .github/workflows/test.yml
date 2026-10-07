@@ -29,9 +29,29 @@ jobs:
       - run: python -m pytest tests -q
         env:
           PGLITE_WORK_DIR: ${{ github.workspace }}/pglite_work
-      - name: web/tests/schema.pg.sql must match core/store.py
-        run: python -c "from core import store; print(store.schema_sql('postgres'), end='')" | diff - web/tests/schema.pg.sql
+      - name: api/tests/schema.pg.sql must match core/store.py
+        run: python -c "from core import store; print(store.schema_sql('postgres'), end='')" | diff - api/tests/schema.pg.sql
 
+  # backend: the JSON API (its own Cloudflare Worker)
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npx wrangler deploy --dry-run --outdir dist
+
+  # frontend: static pages (a separate Cloudflare Worker serving files)
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -46,7 +66,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npx tsc --noEmit
       - run: npm run lint
-      - run: npm test
-      - run: npx opennextjs-cloudflare build
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.example.com
+      - run: npx tsc --noEmit

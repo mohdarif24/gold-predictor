@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { apiRequest } from "@/lib/api";
 import { setLang, useT, type Key } from "@/lib/i18n";
 import { useInstrument } from "@/lib/instrument";
 import { useMe } from "@/lib/role";
@@ -95,7 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               type="button"
               title={me?.email}
               onClick={async () => {
-                await fetch("/api/logout", { method: "POST" }).catch(() => null);
+                await apiRequest("logout", { method: "POST" }).catch(() => null);
                 // full reload on purpose: drops any state from the old session
                 // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                 window.location.assign("/login");

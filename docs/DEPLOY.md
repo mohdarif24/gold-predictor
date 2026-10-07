@@ -43,11 +43,24 @@ Python 3.13 only if you want to run things locally. Optional: a Telegram bot (vi
    data, tests the single winner once on the newest 20% (the locked hold-out), and retrains the live models with the result.
    It then runs by itself on the 1st of each month. Until it has run, the app uses a default model and says so.
 
-## 3. Cloudflare (website)
-1. Run the `deploy` workflow (Actions tab) or push a change under `web/`. The first run creates the Worker
-   `gold-predictor` at `https://gold-predictor.<your-subdomain>.workers.dev`.
-2. Worker **Settings > Variables and Secrets**: add the secret `DATABASE_URL` (same Neon string).
-3. **Zero Trust (Access)** is the login:
+## 3. Cloudflare (website): two separate hosts
+The backend and the frontend are two Workers on the same account:
+
+| Worker | Folder | Address | Holds |
+|---|---|---|---|
+| `gold-predictor-api` (backend) | `api/` | `https://gold-predictor-api.<your-subdomain>.workers.dev` | all data access, sign-in, roles, admin settings; every secret |
+| `gold-predictor` (frontend) | `web/` | `https://gold-predictor.<your-subdomain>.workers.dev` | static pages only; no secrets |
+
+1. In `api/wrangler.jsonc` set `ALLOWED_ORIGINS` to your frontend address. Both must stay on the same site (the same
+   `<your-subdomain>.workers.dev`, or one custom domain such as `app.example.com` + `api.example.com`) so the browser sends
+   the HttpOnly sign-in cookie to the API.
+2. Repository **Settings > Secrets and variables > Actions > Variables**: add `API_URL` = the backend address. The frontend
+   build bakes it in.
+3. Run the `deploy` workflow (Actions tab) or push a change under `api/` or `web/`; each Worker redeploys when its folder
+   changes. By hand: `cd api && npx wrangler deploy`, then `cd web && NEXT_PUBLIC_API_URL=<backend address> npm run build && npx wrangler deploy`.
+4. Backend secrets (`cd api`, then `npx wrangler secret put NAME`): `DATABASE_URL` (same Neon string), `SESSION_SECRET`,
+   `SETTINGS_KEY` (both 32+ random characters). The frontend needs none.
+5. **Zero Trust (Access)** is an optional extra login (otherwise use access codes, 3b). Its secrets also go on the backend:
    1. Create a Zero Trust organisation (free plan covers up to 50 users). Note your **team domain**
       (`<team>.cloudflareaccess.com`).
    2. Protect the site: Worker **Settings > Domains & Routes**, enable Cloudflare Access for the workers.dev address
@@ -55,14 +68,16 @@ Python 3.13 only if you want to run things locally. Optional: a Telegram bot (vi
    3. Policy: **Allow**, include the **emails** of the people who may sign in. Login method: **One-time PIN**
       (they get a code by email, no passwords to manage).
    4. Copy the application's **Audience (AUD) tag**.
-4. Add two more Worker secrets: `CF_ACCESS_TEAM_DOMAIN` (the team domain, no `https://`) and `CF_ACCESS_AUD`.
-5. Open the site. You should get the email-code screen, then the dashboard. If every API call answers 401, the team
-   domain or AUD value is wrong. The site refuses to show data without a valid Access token, by design.
+   5. Add two more backend secrets: `CF_ACCESS_TEAM_DOMAIN` (the team domain, no `https://`) and `CF_ACCESS_AUD`, and
+      protect both Workers with the same Access application.
+6. Open the frontend address. Check the backend with `https://gold-predictor-api.<your-subdomain>.workers.dev/api/health`.
+   If every call answers 401, sign in again; if the browser console shows a CORS error, `ALLOWED_ORIGINS` does not match
+   the frontend address exactly.
 
-To add a client later: add their email to the Access policy. Nothing else.
+To add a client later: with access codes, use the website's **Users** page; with Access, add their email to the policy.
 
 ## 3b. Sign-in without Cloudflare Access: access codes
-If you do not want to set up Zero Trust, the site has its own sign-in. Set a Worker secret `SESSION_SECRET`
+If you do not want to set up Zero Trust, the site has its own sign-in. Set the backend secret `SESSION_SECRET`
 (any random text of 32+ characters, for example from `python -c "import secrets; print(secrets.token_urlsafe(48))"`), then give
 each person a code:
 
@@ -110,7 +125,10 @@ Only new Buy/Sell signals send alerts, never Wait.
 
 ## 6. Local development
 ```bash
-cp web/.dev.vars.example web/.dev.vars          # DATABASE_URL + DEV_USER_EMAIL (skips Access locally)
-cd web && npm install && npm run dev
+cp api/.dev.vars.example api/.dev.vars     # DATABASE_URL, DEV_USER_EMAIL, SESSION_SECRET, SETTINGS_KEY
+cp web/.env.example web/.env.local         # NEXT_PUBLIC_API_URL=http://localhost:8787
+cd api && npm install && npm run dev       # backend on http://localhost:8787
+cd web && npm install && npm run dev       # frontend on http://localhost:3000 (second terminal)
 ```
-`DEV_USER_EMAIL` is ignored in production builds.
+On Windows, `start-local.cmd` does all of it. `DEV_USER_EMAIL` signs you in as super admin only for requests to localhost
+and never in production.

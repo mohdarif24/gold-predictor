@@ -1,37 +1,12 @@
 import type { NextConfig } from "next";
 
-// Browser-side protections. The page loads nothing from other sites (fonts are self-hosted by next/font, the chart is a
-// canvas, data comes from /api), so the policy can be strict. Next.js needs inline scripts and styles for its own bootstrap.
-const csp = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join("; ");
-
+// The frontend is a static site (every page is client-rendered; all data comes from the separate API in ../api).
+// `next build` writes plain files to out/, which a Cloudflare Worker serves as static assets. Security headers for
+// those files are written to out/_headers by scripts/write-headers.mjs, because static exports cannot set headers here.
 const nextConfig: NextConfig = {
+  output: "export",
   poweredByHeader: false,
-  async headers() {
-    return [
-      {
-        source: "/:path*",
-        headers: [
-          { key: "Content-Security-Policy", value: csp },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
-          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
-        ],
-      },
-    ];
-  },
+  images: { unoptimized: true },
 };
 
 export default nextConfig;

@@ -1,0 +1,17 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// The backend: JSON API only. The frontend (../web) is a separate Worker that serves static pages.
+	"name": "gold-predictor-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-09-01",
+	// nodejs_compat also exposes the variables and secrets below as process.env
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"observability": { "enabled": true },
+	"vars": {
+		// browser origins allowed to call this API (comma separated); the frontend must sit on the same site for the
+		// session cookie, e.g. both under <account>.workers.dev or both under one custom domain
+		"ALLOWED_ORIGINS": "https://gold-predictor.predictor-au.workers.dev"
+		// Secrets, set with `wrangler secret put NAME` (see ../docs/DEPLOY.md):
+		//   DATABASE_URL, SESSION_SECRET, SETTINGS_KEY; optional CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD, ADMIN_EMAILS
+	}
+}

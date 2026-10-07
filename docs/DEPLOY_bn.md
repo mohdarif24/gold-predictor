@@ -40,21 +40,30 @@ GitHub, [Neon](https://neon.tech) আর [Cloudflare](https://dash.cloudflare.co
    বিজয়ীকে নতুন ২০% ডেটায় (তালা-দেওয়া hold-out) একবার পরীক্ষা করে, আর ফল দিয়ে চালু মডেল নতুন করে শেখায়। এরপর প্রতি মাসের ১ তারিখে নিজে চলে।
    এটা না চলা পর্যন্ত অ্যাপ একটা ডিফল্ট মডেল ব্যবহার করে এবং সে কথা জানায়।
 
-## ৩. Cloudflare (ওয়েবসাইট)
-1. Actions থেকে `deploy` workflow চালান (বা `web/`-এ কোনো পরিবর্তন push করুন)। প্রথমবারে `gold-predictor` নামে Worker তৈরি হয়: `https://gold-predictor.<আপনার-subdomain>.workers.dev`।
-2. Worker-এর **Settings > Variables and Secrets**-এ Secret `DATABASE_URL` দিন (Neon-এর একই string)।
-3. **Zero Trust (Access)** হলো লগইন:
+## ৩. Cloudflare (ওয়েবসাইট): দুটো আলাদা হোস্ট
+ব্যাকএন্ড আর ফ্রন্টএন্ড একই অ্যাকাউন্টে দুটো আলাদা Worker:
+
+| Worker | ফোল্ডার | ঠিকানা | কী রাখে |
+|---|---|---|---|
+| `gold-predictor-api` (ব্যাকএন্ড) | `api/` | `https://gold-predictor-api.<আপনার-subdomain>.workers.dev` | সব ডেটা, সাইন-ইন, ভূমিকা, অ্যাডমিন সেটিং; সব secret |
+| `gold-predictor` (ফ্রন্টএন্ড) | `web/` | `https://gold-predictor.<আপনার-subdomain>.workers.dev` | শুধু স্ট্যাটিক পেজ; কোনো secret নেই |
+
+1. `api/wrangler.jsonc`-এ `ALLOWED_ORIGINS`-এ ফ্রন্টএন্ডের ঠিকানা দিন। দুটোকে একই সাইটে থাকতে হবে (একই `<subdomain>.workers.dev`, বা একটি নিজস্ব domain যেমন `app.example.com` + `api.example.com`), তাহলেই ব্রাউজার HttpOnly সাইন-ইন কুকি API-তে পাঠায়।
+2. Repository **Settings > Secrets and variables > Actions > Variables**-এ `API_URL` = ব্যাকএন্ডের ঠিকানা দিন। ফ্রন্টএন্ড বিল্ডে এটা বসে যায়।
+3. Actions থেকে `deploy` workflow চালান বা `api/` / `web/`-এ পরিবর্তন push করুন; যার ফোল্ডার বদলেছে শুধু সেটাই আবার deploy হয়। হাতে: `cd api && npx wrangler deploy`, তারপর `cd web && NEXT_PUBLIC_API_URL=<ব্যাকএন্ডের ঠিকানা> npm run build && npx wrangler deploy`।
+4. ব্যাকএন্ডের secret (`cd api`, তারপর `npx wrangler secret put NAME`): `DATABASE_URL` (Neon-এর একই string), `SESSION_SECRET`, `SETTINGS_KEY` (দুটোই ৩২+ এলোমেলো অক্ষর)। ফ্রন্টএন্ডে কোনো secret লাগে না।
+5. **Zero Trust (Access)** ঐচ্ছিক বাড়তি লগইন (না হলে ৩খ-এর অ্যাক্সেস কোড)। এর secret-ও ব্যাকএন্ডে যায়:
    1. একটা Zero Trust organisation বানান (বিনামূল্যে ৫০ জন পর্যন্ত)। আপনার **team domain** (`<team>.cloudflareaccess.com`) টুকে রাখুন।
    2. সাইট সুরক্ষিত করুন: Worker **Settings > Domains & Routes**-এ workers.dev ঠিকানার জন্য Cloudflare Access চালু করুন (বা নিজের domain-এর জন্য self-hosted Access application)।
    3. Policy: **Allow**, যাঁরা ঢুকবেন তাঁদের **ইমেইল** দিন। লগইন পদ্ধতি **One-time PIN** (ইমেইলে কোড আসে, পাসওয়ার্ড সামলাতে হয় না)।
    4. application-এর **Audience (AUD) tag** কপি করুন।
-4. আরও দুটো Worker Secret দিন: `CF_ACCESS_TEAM_DOMAIN` (team domain, `https://` ছাড়া) আর `CF_ACCESS_AUD`।
-5. সাইট খুলুন। প্রথমে ইমেইল-কোডের পর্দা, তারপর dashboard আসবে। সব API 401 দিলে team domain বা AUD ভুল। বৈধ Access token ছাড়া সাইট ডেটা দেখাতে অস্বীকার করে, এটা ইচ্ছাকৃত।
+   5. ব্যাকএন্ডে আরও দুটো secret দিন: `CF_ACCESS_TEAM_DOMAIN` (team domain, `https://` ছাড়া) আর `CF_ACCESS_AUD`, এবং দুটো Worker-কেই একই Access application দিয়ে সুরক্ষিত করুন।
+6. ফ্রন্টএন্ডের ঠিকানা খুলুন। ব্যাকএন্ড ঠিক আছে কিনা দেখতে: `https://gold-predictor-api.<আপনার-subdomain>.workers.dev/api/health`। সব কল 401 দিলে আবার সাইন-ইন করুন; ব্রাউজার console-এ CORS ত্রুটি দেখালে `ALLOWED_ORIGINS` ফ্রন্টএন্ডের ঠিকানার সাথে হুবহু মেলেনি।
 
-নতুন client যোগ করতে: Access policy-তে তাঁর ইমেইল যোগ করুন। আর কিছু না।
+নতুন client যোগ করতে: অ্যাক্সেস কোড হলে ওয়েবসাইটের **ব্যবহারকারী** পেজ; Access হলে policy-তে তাঁর ইমেইল।
 
 ## ৩খ. Cloudflare Access ছাড়া সাইন-ইন: অ্যাক্সেস কোড
-Zero Trust চালু করতে না চাইলে সাইটের নিজস্ব সাইন-ইন আছে। Worker secret `SESSION_SECRET` বসান (৩২+ অক্ষরের যেকোনো এলোমেলো লেখা),
+Zero Trust চালু করতে না চাইলে সাইটের নিজস্ব সাইন-ইন আছে। ব্যাকএন্ডে secret `SESSION_SECRET` বসান (৩২+ অক্ষরের যেকোনো এলোমেলো লেখা),
 তারপর প্রত্যেককে একটা কোড দিন:
 
 ```bash
@@ -93,7 +102,9 @@ GitHub-এ Telegram ও/বা SMTP Secret দিন। প্রত্যেক
 
 ## ৬. লোকাল ডেভেলপমেন্ট
 ```bash
-cp web/.dev.vars.example web/.dev.vars          # DATABASE_URL + DEV_USER_EMAIL (লোকালে Access এড়ায়)
-cd web && npm install && npm run dev
+cp api/.dev.vars.example api/.dev.vars     # DATABASE_URL, DEV_USER_EMAIL, SESSION_SECRET, SETTINGS_KEY
+cp web/.env.example web/.env.local         # NEXT_PUBLIC_API_URL=http://localhost:8787
+cd api && npm install && npm run dev       # ব্যাকএন্ড: http://localhost:8787
+cd web && npm install && npm run dev       # ফ্রন্টএন্ড: http://localhost:3000 (আরেকটা টার্মিনালে)
 ```
-`DEV_USER_EMAIL` production build-এ উপেক্ষিত হয়।
+Windows-এ `start-local.cmd` সব একসাথে করে। `DEV_USER_EMAIL` শুধু localhost-এর অনুরোধে সুপার অ্যাডমিন হিসেবে ঢোকায়, production-এ কখনো না।

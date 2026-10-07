@@ -9,8 +9,8 @@ export type Section = { id: string; title: T; intro?: T; entries: Entry[] };
 const t = (en: string, bn: string): T => ({ en, bn });
 
 export const PITCH: T = t(
-  "Python jobs on GitHub Actions collect free market, macro, positioning and news data every 15 minutes, build about 150 features with a strict no-look-ahead rule, and run machine-learning models that were chosen in a two-stage competition and judged once on a locked final 20% of history. Results are written to a Neon Postgres database. A Next.js web app running on Cloudflare Workers reads that database: clients see only a calibrated “higher X% / lower Y%” chance, while the super admin sees every model, input, log and setting. Nothing runs on a server we manage, and everything is free tier.",
-  "GitHub Actions-এ চলা Python কাজগুলো প্রতি ১৫ মিনিটে বিনামূল্যের বাজার, অর্থনীতি, অবস্থান ও খবরের তথ্য আনে, কঠোর “ভবিষ্যৎ না দেখা” নিয়মে প্রায় ১৫০টি বৈশিষ্ট্য বানায়, এবং এমন মেশিন-লার্নিং মডেল চালায় যা দুই ধাপের প্রতিযোগিতায় বাছাই হয়ে ইতিহাসের লক করা শেষ ২০%-এ একবার যাচাই হয়েছে। ফল যায় Neon Postgres ডেটাবেসে। Cloudflare Workers-এ চলা একটি Next.js ওয়েব অ্যাপ সেই ডেটাবেস পড়ে: গ্রাহক শুধু ক্যালিব্রেটেড “বাড়বে X% / কমবে Y%” দেখেন, আর সুপার অ্যাডমিন সব মডেল, ইনপুট, লগ ও সেটিং দেখেন। আমাদের নিজের কোনো সার্ভার নেই, আর সবকিছু ফ্রি টিয়ারে চলে।",
+  "Python jobs on GitHub Actions collect free market, macro, positioning and news data every 15 minutes, build about 150 features with a strict no-look-ahead rule, and run machine-learning models that were chosen in a two-stage competition and judged once on a locked final 20% of history. Results are written to a Neon Postgres database. A backend API on its own Cloudflare Worker reads that database and checks every sign-in and role; a separate frontend (static Next.js pages on another Worker) calls the API from the browser. Clients see only a calibrated “higher X% / lower Y%” chance, while the super admin sees every model, input, log and setting. Nothing runs on a server we manage, and everything is free tier.",
+  "GitHub Actions-এ চলা Python কাজগুলো প্রতি ১৫ মিনিটে বিনামূল্যের বাজার, অর্থনীতি, অবস্থান ও খবরের তথ্য আনে, কঠোর “ভবিষ্যৎ না দেখা” নিয়মে প্রায় ১৫০টি বৈশিষ্ট্য বানায়, এবং এমন মেশিন-লার্নিং মডেল চালায় যা দুই ধাপের প্রতিযোগিতায় বাছাই হয়ে ইতিহাসের লক করা শেষ ২০%-এ একবার যাচাই হয়েছে। ফল যায় Neon Postgres ডেটাবেসে। নিজস্ব Cloudflare Worker-এ চলা ব্যাকএন্ড API সেই ডেটাবেস পড়ে এবং প্রতিটি সাইন-ইন ও ভূমিকা যাচাই করে; আলাদা আরেকটি Worker-এ থাকা ফ্রন্টএন্ড (স্ট্যাটিক Next.js পাতা) ব্রাউজার থেকে সেই API ডাকে। গ্রাহক শুধু ক্যালিব্রেটেড “বাড়বে X% / কমবে Y%” দেখেন, আর সুপার অ্যাডমিন সব মডেল, ইনপুট, লগ ও সেটিং দেখেন। আমাদের নিজের কোনো সার্ভার নেই, আর সবকিছু ফ্রি টিয়ারে চলে।",
 );
 
 /** The architecture map: lanes left to right, each with what runs there. */
@@ -28,8 +28,12 @@ export const MAP: { lane: T; tech: string; items: T[] }[] = [
     items: [t("predictions, models, studies", "প্রেডিকশন, মডেল, স্টাডি"), t("news, prices, drivers", "খবর, দাম, ড্রাইভার"), t("users, settings, API logs", "ব্যবহারকারী, সেটিং, API লগ")],
   },
   {
-    lane: t("Face (website)", "মুখ (ওয়েবসাইট)"), tech: "Next.js on Cloudflare Workers",
-    items: [t("API routes check sign-in and role", "API রুট সাইন-ইন ও ভূমিকা যাচাই করে"), t("client pages: signal only", "গ্রাহকের পাতা: শুধু সংকেত"), t("super admin pages: everything", "সুপার অ্যাডমিনের পাতা: সবকিছু")],
+    lane: t("Backend (API)", "ব্যাকএন্ড (API)"), tech: "Cloudflare Worker: gold-predictor-api",
+    items: [t("JSON endpoints, one route table", "JSON এন্ডপয়েন্ট, একটি রুট-তালিকা"), t("sign-in, roles, CORS", "সাইন-ইন, ভূমিকা, CORS"), t("holds every secret", "সব গোপন তথ্য এখানে")],
+  },
+  {
+    lane: t("Frontend (website)", "ফ্রন্টএন্ড (ওয়েবসাইট)"), tech: "Cloudflare Worker: gold-predictor (static)",
+    items: [t("static Next.js pages, no server code", "স্ট্যাটিক Next.js পাতা, সার্ভার কোড নেই"), t("client pages: signal only", "গ্রাহকের পাতা: শুধু সংকেত"), t("super admin pages: everything", "সুপার অ্যাডমিনের পাতা: সবকিছু")],
   },
 ];
 
@@ -92,18 +96,21 @@ export const FLOWS: Flow[] = [
   {
     id: "flow-web",
     title: t("Flow 2: how the website shows it", "ফ্লো ২: ওয়েবসাইট কীভাবে দেখায়"),
-    trigger: t("A person opens the site (Next.js on Cloudflare Workers).", "কেউ সাইট খোলেন (Cloudflare Workers-এ Next.js)।"),
+    trigger: t("A person opens the frontend (static pages on the gold-predictor Worker).", "কেউ ফ্রন্টএন্ড খোলেন (gold-predictor Worker-এ স্ট্যাটিক পাতা)।"),
     steps: [
-      { fn: "SignalPage → useApi(\"public/…\")", file: "web/app/(app)/page.tsx, web/lib/api.ts", lib: "React", what: t("The page asks the server for the client signal; it refreshes every 2 minutes.", "পাতা সার্ভারের কাছে গ্রাহকের সংকেত চায়; প্রতি ২ মিনিটে হালনাগাদ।") },
-      { fn: "GET /api/public/[name]", file: "web/app/api/public/[name]/route.ts", lib: "Next.js route handler", what: t("Server endpoint.", "সার্ভার এন্ডপয়েন্ট।") },
-      { fn: "secured()", file: "web/lib/http.ts", lib: "jose", what: t("Checks sign-in and role on every request.", "প্রতিটি অনুরোধে সাইন-ইন ও ভূমিকা যাচাই।"),
+      { fn: "SignalPage → useApi(\"public/…\")", file: "web/app/(app)/page.tsx, web/lib/api.ts", lib: "React", what: t("The page in the browser asks the backend for the client signal (refreshes every 2 minutes).", "ব্রাউজারের পাতা ব্যাকএন্ডের কাছে গ্রাহকের সংকেত চায় (প্রতি ২ মিনিটে হালনাগাদ)।"),
         calls: [
-          { fn: "access.caller()", file: "web/lib/access.ts", lib: "jose (HS256)", what: t("Verifies the session cookie (or Cloudflare Access token).", "সেশন কুকি (বা Cloudflare Access টোকেন) যাচাই।") },
-          { fn: "queries.accessOf()", file: "web/lib/queries.ts", what: t("Re-reads role and extra pages; admin-only routes return 403 to clients.", "ভূমিকা ও বাড়তি পাতা আবার পড়ে; অ্যাডমিন রুট গ্রাহককে 403 দেয়।") },
+          { fn: "apiRequest()", file: "web/lib/api.ts", lib: "fetch", what: t("Calls NEXT_PUBLIC_API_URL with credentials: \"include\", so the HttpOnly session cookie travels along.", "credentials: \"include\" দিয়ে NEXT_PUBLIC_API_URL ডাকে, তাই HttpOnly সেশন কুকি সাথে যায়।") },
         ] },
-      { fn: "queries.getPublicSignal()", file: "web/lib/queries.ts", what: t("Reads scorecards, research and the latest predictions; returns only “higher X% / lower Y%”.", "scorecards, research ও সর্বশেষ predictions পড়ে; শুধু “বাড়বে X% / কমবে Y%” ফেরত দেয়।") },
-      { fn: "db.run() → neon().query()", file: "web/lib/db.ts", lib: "@neondatabase/serverless", what: t("SQL over HTTPS to Neon Postgres.", "HTTPS-এ Neon Postgres-এ SQL।") },
-      { fn: "Card per window", file: "web/app/(app)/page.tsx", lib: "Tailwind CSS", what: t("Green / red bar and plain words in English or Bengali (web/lib/i18n.tsx).", "সবুজ / লাল বার ও ইংরেজি বা বাংলায় সহজ কথা (web/lib/i18n.tsx)।") },
+      { fn: "fetch() → match()", file: "api/src/index.ts, api/src/routes.ts", lib: "Cloudflare Workers", what: t("The backend Worker checks the caller’s origin (CORS), finds GET /api/public/:name in the route table.", "ব্যাকএন্ড Worker কলারের origin যাচাই করে (CORS), রুট-তালিকায় GET /api/public/:name খোঁজে।") },
+      { fn: "secured()", file: "api/src/lib/http.ts", lib: "jose", what: t("Checks sign-in and role on every request.", "প্রতিটি অনুরোধে সাইন-ইন ও ভূমিকা যাচাই।"),
+        calls: [
+          { fn: "access.caller()", file: "api/src/lib/access.ts", lib: "jose (HS256)", what: t("Verifies the session cookie (or Cloudflare Access token).", "সেশন কুকি (বা Cloudflare Access টোকেন) যাচাই।") },
+          { fn: "queries.accessOf()", file: "api/src/lib/queries.ts", what: t("Re-reads role and extra pages; admin-only routes return 403 to clients.", "ভূমিকা ও বাড়তি পাতা আবার পড়ে; অ্যাডমিন রুট গ্রাহককে 403 দেয়।") },
+        ] },
+      { fn: "queries.getPublicSignal()", file: "api/src/lib/queries.ts", what: t("Reads scorecards, research and the latest predictions; returns only “higher X% / lower Y%”.", "scorecards, research ও সর্বশেষ predictions পড়ে; শুধু “বাড়বে X% / কমবে Y%” ফেরত দেয়।") },
+      { fn: "db.run() → neon().query()", file: "api/src/lib/db.ts", lib: "@neondatabase/serverless", what: t("SQL over HTTPS to Neon Postgres.", "HTTPS-এ Neon Postgres-এ SQL।") },
+      { fn: "Card per window", file: "web/app/(app)/page.tsx", lib: "Tailwind CSS", what: t("Back in the browser: green / red bar and plain words in English or Bengali (web/lib/i18n.tsx).", "ব্রাউজারে ফিরে: সবুজ / লাল বার ও ইংরেজি বা বাংলায় সহজ কথা (web/lib/i18n.tsx)।") },
     ],
   },
   {
@@ -188,7 +195,7 @@ export const SECTIONS: Section[] = [
       { name: "Walk-forward + purge gap", where: "core/backtest.py", what: t("Train on everything before a block, skip N bars, test the block, move on.", "একটি অংশের আগের সব দিয়ে শেখা, N বার বাদ, অংশটি পরীক্ষা, এগিয়ে যাওয়া।"), why: t("Mimics live use; the gap stops overlapping labels leaking.", "লাইভ ব্যবহারের মতো; gap একে অন্যে মেশা লেবেল ফাঁস হওয়া থামায়।") },
       { name: "Two-stage competition", where: "research/study.py", what: t("Stage A: every model on chart inputs. Stage B: the best two on four more input sets. ≈18 candidates, scored by AUC on the first 80%.", "ধাপ A: চার্ট-ইনপুটে সব মডেল। ধাপ B: সেরা দুটি আরও চারটি ইনপুট-সেটে। ≈১৮ প্রার্থী, প্রথম ৮০%-এ AUC দিয়ে নম্বর।"), why: t("Search wide but keep the number of tries countable.", "বিস্তৃত খোঁজা, কিন্তু চেষ্টার সংখ্যা গণনাযোগ্য রাখা।") },
       { name: "Locked hold-out + gate", where: "research/study.py GATE", what: t("The winner is tested once on the last 20%. Pass needs: ≥300 rows, AUC 95% range above 0.5, accuracy ≥ guessing + 1 pt, positive return and Sharpe after costs, ≥30 trades.", "বিজয়ীকে শেষ ২০%-এ একবার পরীক্ষা। পাসের শর্ত: ≥৩০০ সারি, AUC-এর ৯৫% পরিসর ০.৫-এর উপরে, সঠিকতা ≥ আন্দাজ + ১ পয়েন্ট, খরচের পরে লাভ ও Sharpe ধনাত্মক, ≥৩০ ট্রেড।"), why: t("If it fails, Buy/Sell is switched off for that window (Wait).", "ব্যর্থ হলে সেই সময়সীমায় কিনুন/বেচুন বন্ধ (অপেক্ষা)।") },
-      { name: "Client chance", where: "core/public.py, web/lib/queries.ts", what: t("Daily: checklist hit rate of similar past days (≥30). Intraday: the model’s number mapped through its hold-out calibration. Clamped 5–95%.", "দৈনিক: একই রকম অতীত দিনের চেকলিস্ট মিলের হার (≥৩০)। ইন্ট্রাডে: মডেলের সংখ্যা তার hold-out ক্যালিব্রেশনে মেলানো। ৫–৯৫%-এ সীমিত।"), why: t("A % shown to a client must be a measured frequency, not a guess.", "গ্রাহককে দেখানো % অবশ্যই মাপা হার, আন্দাজ নয়।") },
+      { name: "Client chance", where: "core/public.py, api/src/lib/queries.ts", what: t("Daily: checklist hit rate of similar past days (≥30). Intraday: the model’s number mapped through its hold-out calibration. Clamped 5–95%.", "দৈনিক: একই রকম অতীত দিনের চেকলিস্ট মিলের হার (≥৩০)। ইন্ট্রাডে: মডেলের সংখ্যা তার hold-out ক্যালিব্রেশনে মেলানো। ৫–৯৫%-এ সীমিত।"), why: t("A % shown to a client must be a measured frequency, not a guess.", "গ্রাহককে দেখানো % অবশ্যই মাপা হার, আন্দাজ নয়।") },
       { name: "Prediction Log", where: "/logs, predictions table", what: t("Each reading is marked right / wrong / waiting / no clear call, with daily, weekly, monthly and yearly counts.", "প্রতিটি পর্যবেক্ষণ সঠিক / ভুল / অপেক্ষায় / স্পষ্ট মত নেই হিসেবে চিহ্নিত, দৈনিক, সাপ্তাহিক, মাসিক ও বার্ষিক গণনাসহ।"), why: t("Live, out-of-sample proof that nobody can tune afterwards.", "লাইভ, নমুনার বাইরের প্রমাণ যা পরে কেউ বদলাতে পারে না।") },
       { name: "Shadow trades", where: "core/shadow.py", what: t("Virtual trades: stop 1.5×ATR, target 2×ATR, costs included.", "ভার্চুয়াল ট্রেড: stop ১.৫×ATR, target ২×ATR, খরচসহ।"), why: t("Shows money results without risking money.", "টাকা ঝুঁকিতে না ফেলে টাকার ফল দেখায়।") },
     ],
@@ -208,25 +215,27 @@ export const SECTIONS: Section[] = [
   },
   {
     id: "web",
-    title: t("Next.js and Node: the website", "Next.js ও Node: ওয়েবসাইট"),
+    title: t("Frontend and backend: two separate hosts", "ফ্রন্টএন্ড ও ব্যাকএন্ড: দুটো আলাদা হোস্ট"),
     intro: t(
-      "Folder web/. Next.js 16 (App Router) with React 19, TypeScript and Tailwind CSS 4. Node.js is used only on the developer’s laptop to build, test and deploy; in production the code runs inside a Cloudflare Worker.",
-      "ফোল্ডার web/। Next.js 16 (App Router), React 19, TypeScript ও Tailwind CSS 4। Node.js শুধু ডেভেলপারের ল্যাপটপে বিল্ড, টেস্ট ও ডিপ্লয়ে লাগে; প্রোডাকশনে কোড Cloudflare Worker-এর ভিতরে চলে।",
+      "Two folders, two Cloudflare Workers, deployed independently. web/ (frontend): Next.js 16, React 19, TypeScript, Tailwind CSS 4, exported as static files; no server code and no secrets. api/ (backend): a TypeScript Worker with one route table; it alone talks to the database and holds every secret. Node.js is used only on the developer’s laptop and in CI to build, test and deploy.",
+      "দুটো ফোল্ডার, দুটো Cloudflare Worker, আলাদাভাবে deploy হয়। web/ (ফ্রন্টএন্ড): Next.js 16, React 19, TypeScript, Tailwind CSS 4, স্ট্যাটিক ফাইল হিসেবে export; কোনো সার্ভার কোড বা গোপন তথ্য নেই। api/ (ব্যাকএন্ড): একটি রুট-তালিকাসহ TypeScript Worker; শুধু এটিই ডেটাবেসের সাথে কথা বলে এবং সব গোপন তথ্য রাখে। Node.js শুধু ডেভেলপারের ল্যাপটপে ও CI-তে বিল্ড, টেস্ট ও deploy-এ লাগে।",
     ),
     entries: [
-      { name: "Pages", where: "web/app/(app)/*/page.tsx", what: t("Signal (everyone); Dashboard, Prediction Logs, Checklist, What moves gold, News, Results, History, How the model works, Notebook, Model API, API Logs, Users (super admin).", "সংকেত (সবার জন্য); ড্যাশবোর্ড, প্রেডিকশন লগ, চেকলিস্ট, সোনা কীসে নড়ে, খবর, ফলাফল, ইতিহাস, মডেল কীভাবে কাজ করে, নোটবুক, মডেল API, API লগ, ব্যবহারকারী (সুপার অ্যাডমিন)।"), why: t("Client screens stay simple; every detail is one click away for the admin.", "গ্রাহকের পর্দা সহজ থাকে; অ্যাডমিনের জন্য প্রতিটি খুঁটিনাটি এক ক্লিকে।") },
-      { name: "API routes", where: "web/app/api/**/route.ts", what: t("Server endpoints wrapped by secured(): checks sign-in, re-reads the role from the database, returns JSON. Admin routes return 403 to users.", "secured() দিয়ে মোড়া সার্ভার এন্ডপয়েন্ট: সাইন-ইন যাচাই, ডেটাবেস থেকে আবার ভূমিকা পড়া, JSON ফেরত। অ্যাডমিন রুট ব্যবহারকারীকে 403 দেয়।"), why: t("Hiding a page is not security; the data itself is refused.", "পাতা লুকানো নিরাপত্তা নয়; তথ্যটাই দেওয়া হয় না।") },
-      { name: "queries / admin", where: "web/lib/queries.ts, web/lib/admin.ts", what: t("All SQL in pure functions over a run() callback.", "সব SQL একটি run() callback-এর উপর বিশুদ্ধ ফাংশনে।"), why: t("Tested against a real in-memory Postgres (PGlite) with Vitest.", "Vitest দিয়ে আসল in-memory Postgres (PGlite)-এ পরীক্ষিত।") },
-      { name: "Auth", where: "web/lib/access.ts, web/lib/http.ts", what: t("Access code → SHA-256 hash lookup → 30-day signed session cookie (jose, HS256). Optional Cloudflare Access.", "অ্যাক্সেস কোড → SHA-256 হ্যাশ মেলানো → ৩০ দিনের সাইন করা সেশন কুকি (jose, HS256)। ঐচ্ছিক Cloudflare Access।"), why: t("No passwords stored; revoking a code locks the person out at once.", "কোনো পাসওয়ার্ড রাখা হয় না; কোড বাতিল করলে সাথে সাথে বের হয়ে যায়।") },
-      { name: "Charts, i18n", where: "lightweight-charts, web/lib/i18n.tsx", what: t("TradingView’s free chart library; every text in English and Bengali.", "TradingView-এর ফ্রি চার্ট লাইব্রেরি; প্রতিটি লেখা ইংরেজি ও বাংলায়।"), why: t("Small and fast on phones; the client reads Bengali.", "ফোনে ছোট ও দ্রুত; গ্রাহক বাংলা পড়েন।") },
+      { name: "Pages (frontend)", where: "web/app/(app)/*/page.tsx", what: t("Signal (everyone); Dashboard, Prediction Logs, Checklist, What moves gold, News, Results, History, How the model works, Notebook, Model API, API Logs, Users (super admin).", "সংকেত (সবার জন্য); ড্যাশবোর্ড, প্রেডিকশন লগ, চেকলিস্ট, সোনা কীসে নড়ে, খবর, ফলাফল, ইতিহাস, মডেল কীভাবে কাজ করে, নোটবুক, মডেল API, API লগ, ব্যবহারকারী (সুপার অ্যাডমিন)।"), why: t("Client screens stay simple; every detail is one click away for the admin.", "গ্রাহকের পর্দা সহজ থাকে; অ্যাডমিনের জন্য প্রতিটি খুঁটিনাটি এক ক্লিকে।") },
+      { name: "API client (frontend)", where: "web/lib/api.ts", what: t("apiFetch() / useApi() call NEXT_PUBLIC_API_URL with credentials: \"include\"; a 401 sends the person to sign-in.", "apiFetch() / useApi() credentials: \"include\" দিয়ে NEXT_PUBLIC_API_URL ডাকে; 401 পেলে সাইন-ইনে পাঠায়।"), why: t("The frontend only knows the API’s address, nothing else.", "ফ্রন্টএন্ড শুধু API-র ঠিকানা জানে, আর কিছু না।") },
+      { name: "Route table (backend)", where: "api/src/routes.ts, api/src/index.ts", what: t("Every endpoint in one list (method, path, who may call it). index.ts adds CORS for the frontend’s origin and refuses changes sent from other sites.", "সব এন্ডপয়েন্ট একটি তালিকায় (method, path, কে ডাকতে পারে)। index.ts ফ্রন্টএন্ডের origin-এর জন্য CORS যোগ করে এবং অন্য সাইট থেকে পাঠানো পরিবর্তন ফিরিয়ে দেয়।"), why: t("Easy to audit: one file shows the whole API surface.", "যাচাই সহজ: একটি ফাইলেই পুরো API দেখা যায়।") },
+      { name: "secured() (backend)", where: "api/src/lib/http.ts", what: t("Wraps each endpoint: checks sign-in, re-reads role and extra pages from the database, returns JSON. Admin routes return 403 to clients.", "প্রতিটি এন্ডপয়েন্ট মোড়ায়: সাইন-ইন যাচাই, ডেটাবেস থেকে আবার ভূমিকা ও বাড়তি পাতা পড়া, JSON ফেরত। অ্যাডমিন রুট গ্রাহককে 403 দেয়।"), why: t("Hiding a page is not security; the data itself is refused.", "পাতা লুকানো নিরাপত্তা নয়; তথ্যটাই দেওয়া হয় না।") },
+      { name: "queries / admin (backend)", where: "api/src/lib/queries.ts, api/src/lib/admin.ts", what: t("All SQL in pure functions over a run() callback.", "সব SQL একটি run() callback-এর উপর বিশুদ্ধ ফাংশনে।"), why: t("Tested against a real in-memory Postgres (PGlite) with Vitest.", "Vitest দিয়ে আসল in-memory Postgres (PGlite)-এ পরীক্ষিত।") },
+      { name: "Auth (backend)", where: "api/src/lib/access.ts", what: t("Access code → SHA-256 hash lookup → 30-day signed HttpOnly session cookie (jose, HS256), SameSite=Lax. Optional Cloudflare Access.", "অ্যাক্সেস কোড → SHA-256 হ্যাশ মেলানো → ৩০ দিনের সাইন করা HttpOnly সেশন কুকি (jose, HS256), SameSite=Lax। ঐচ্ছিক Cloudflare Access।"), why: t("No passwords stored; page scripts cannot read the cookie; revoking a code locks the person out at once.", "কোনো পাসওয়ার্ড রাখা হয় না; পাতার স্ক্রিপ্ট কুকি পড়তে পারে না; কোড বাতিল করলে সাথে সাথে বের হয়ে যায়।") },
+      { name: "Charts, i18n (frontend)", where: "lightweight-charts, web/lib/i18n.tsx", what: t("TradingView’s free chart library; every text in English and Bengali.", "TradingView-এর ফ্রি চার্ট লাইব্রেরি; প্রতিটি লেখা ইংরেজি ও বাংলায়।"), why: t("Small and fast on phones; the client reads Bengali.", "ফোনে ছোট ও দ্রুত; গ্রাহক বাংলা পড়েন।") },
     ],
   },
   {
     id: "neon",
     title: t("Neon: the database", "Neon: ডেটাবেস"),
     intro: t(
-      "Serverless Postgres (free tier, Singapore region). Python connects with psycopg through the pooled endpoint; the website connects with @neondatabase/serverless over HTTPS. The connection string is a secret (DATABASE_URL) in GitHub and Cloudflare, never in the code.",
-      "Serverless Postgres (ফ্রি টিয়ার, সিঙ্গাপুর)। Python pooled endpoint দিয়ে psycopg-এ যুক্ত হয়; ওয়েবসাইট HTTPS-এ @neondatabase/serverless দিয়ে। সংযোগের ঠিকানা GitHub ও Cloudflare-এ গোপন (DATABASE_URL), কোডে কখনো নয়।",
+      "Serverless Postgres (free tier, Singapore region). Python connects with psycopg through the pooled endpoint; the backend API connects with @neondatabase/serverless over HTTPS (the frontend never touches the database). The connection string is a secret (DATABASE_URL) in GitHub and Cloudflare, never in the code.",
+      "Serverless Postgres (ফ্রি টিয়ার, সিঙ্গাপুর)। Python pooled endpoint দিয়ে psycopg-এ যুক্ত হয়; ব্যাকএন্ড API HTTPS-এ @neondatabase/serverless দিয়ে (ফ্রন্টএন্ড কখনো ডেটাবেস ছোঁয় না)। সংযোগের ঠিকানা GitHub ও Cloudflare-এ গোপন (DATABASE_URL), কোডে কখনো নয়।",
     ),
     entries: [
       { name: "predictions", what: t("Every reading: time, window, price, model %, client %, signal, regime, and later the outcome and price.", "প্রতিটি পর্যবেক্ষণ: সময়, সময়সীমা, দাম, মডেলের %, গ্রাহকের %, সংকেত, অবস্থা, এবং পরে ফল ও দাম।"), why: t("Source of the Prediction Log.", "প্রেডিকশন লগের উৎস।") },
@@ -242,10 +251,10 @@ export const SECTIONS: Section[] = [
     id: "cloudflare",
     title: t("Cloudflare: hosting", "Cloudflare: হোস্টিং"),
     entries: [
-      { name: "Workers", what: t("Runs the website at the edge, close to the user. Free tier: 100,000 requests a day.", "ব্যবহারকারীর কাছাকাছি edge-এ ওয়েবসাইট চালায়। ফ্রি টিয়ার: দিনে ১,০০,০০০ অনুরোধ।"), why: t("No server to patch or pay for; fast in Bangladesh and India.", "প্যাচ বা টাকা দেওয়ার মতো কোনো সার্ভার নেই; বাংলাদেশ ও ভারতে দ্রুত।") },
-      { name: "OpenNext adapter", where: "@opennextjs/cloudflare, web/open-next.config.ts", what: t("Converts the Next.js build into a Worker.", "Next.js বিল্ডকে Worker-এ রূপান্তর করে।"), why: t("Next.js was built for Node; this makes it run on Workers.", "Next.js Node-এর জন্য বানানো; এটি Workers-এ চালায়।") },
-      { name: "wrangler", where: "web/wrangler.jsonc", what: t("Cloudflare’s CLI: deploy, and store secrets (DATABASE_URL, SESSION_SECRET, SETTINGS_KEY).", "Cloudflare-এর CLI: ডিপ্লয়, এবং গোপন তথ্য রাখা (DATABASE_URL, SESSION_SECRET, SETTINGS_KEY)।"), why: t("Secrets live in Cloudflare, not in the repository.", "গোপন তথ্য Cloudflare-এ থাকে, রিপোজিটরিতে নয়।") },
-      { name: "Security headers", where: "web/next.config.ts", what: t("Content-Security-Policy, no framing, strict referrer, HTTPS only.", "Content-Security-Policy, ফ্রেমিং নিষেধ, কঠোর referrer, শুধু HTTPS।"), why: t("Blocks common browser attacks.", "সাধারণ ব্রাউজার আক্রমণ ঠেকায়।") },
+      { name: "Two Workers", what: t("gold-predictor-api (backend, code) and gold-predictor (frontend, static files) run at the edge, close to the user. Free tier: 100,000 requests a day; static files are free.", "gold-predictor-api (ব্যাকএন্ড, কোড) ও gold-predictor (ফ্রন্টএন্ড, স্ট্যাটিক ফাইল) ব্যবহারকারীর কাছাকাছি edge-এ চলে। ফ্রি টিয়ার: দিনে ১,০০,০০০ অনুরোধ; স্ট্যাটিক ফাইল বিনামূল্যে।"), why: t("No server to patch or pay for; each side can be deployed, scaled or replaced on its own.", "প্যাচ বা টাকা দেওয়ার মতো সার্ভার নেই; প্রতিটি অংশ আলাদাভাবে deploy, বড় বা বদলানো যায়।") },
+      { name: "Static assets", where: "web/wrangler.jsonc, web/next.config.ts (output: \"export\")", what: t("The frontend build is plain HTML/JS/CSS in out/, served by Cloudflare without running code.", "ফ্রন্টএন্ড বিল্ড out/-এ সাধারণ HTML/JS/CSS, Cloudflare কোড না চালিয়েই পরিবেশন করে।"), why: t("Fast, cheap, and nothing on the frontend host can leak data.", "দ্রুত, সস্তা, আর ফ্রন্টএন্ড হোস্ট থেকে কোনো তথ্য ফাঁস হতে পারে না।") },
+      { name: "wrangler", where: "api/wrangler.jsonc, web/wrangler.jsonc", what: t("Cloudflare’s CLI: deploys both Workers; backend secrets (DATABASE_URL, SESSION_SECRET, SETTINGS_KEY) are stored with wrangler secret put.", "Cloudflare-এর CLI: দুটো Worker deploy করে; ব্যাকএন্ডের গোপন তথ্য (DATABASE_URL, SESSION_SECRET, SETTINGS_KEY) wrangler secret put দিয়ে রাখা হয়।"), why: t("Secrets live in Cloudflare, not in the repository, and only on the backend.", "গোপন তথ্য Cloudflare-এ থাকে, রিপোজিটরিতে নয়, এবং শুধু ব্যাকএন্ডে।") },
+      { name: "Security headers · CORS", where: "web/scripts/postbuild.mjs (_headers), api/src/lib/http.ts", what: t("Frontend: Content-Security-Policy allowing calls only to the API, no framing, HTTPS only. Backend: CORS only for the frontend’s origin, with credentials.", "ফ্রন্টএন্ড: শুধু API-তে কল করতে দেওয়া Content-Security-Policy, ফ্রেমিং নিষেধ, শুধু HTTPS। ব্যাকএন্ড: শুধু ফ্রন্টএন্ডের origin-এর জন্য credentials-সহ CORS।"), why: t("Other sites can neither embed the pages nor read the API with a signed-in visitor’s cookie.", "অন্য সাইট পাতাগুলো বসাতে পারে না, আর সাইন-ইন করা কারও কুকি দিয়ে API-ও পড়তে পারে না।") },
     ],
   },
   {
@@ -255,7 +264,7 @@ export const SECTIONS: Section[] = [
       { name: "predict.yml", what: t("Every 15 minutes: settle practice trades, score finished readings, predict, refresh news, publish candles, send alerts.", "প্রতি ১৫ মিনিটে: অনুশীলন ট্রেড মেটানো, শেষ হওয়া পর্যবেক্ষণে নম্বর, প্রেডিকশন, খবর হালনাগাদ, ক্যান্ডেল প্রকাশ, অ্যালার্ট পাঠানো।"), why: t("Free compute on a schedule (public repo).", "সময়মতো বিনামূল্যের কম্পিউট (পাবলিক রিপো)।") },
       { name: "train.yml", what: t("Sundays 02:30 UTC: retrain the chosen models on the latest data.", "রবিবার ০২:৩০ UTC: সর্বশেষ তথ্যে বাছাই করা মডেল আবার শেখানো।"), why: t("Models stay current without re-choosing them every week.", "প্রতি সপ্তাহে আবার বাছাই না করেই মডেল হালনাগাদ থাকে।") },
       { name: "research.yml", what: t("1st of each month: the full competition and locked test, one job per instrument.", "প্রতি মাসের ১ তারিখ: পুরো প্রতিযোগিতা ও লক করা পরীক্ষা, প্রতি ইন্সট্রুমেন্টে একটি কাজ।"), why: t("Re-checks the evidence as new data arrives.", "নতুন তথ্য এলে প্রমাণ আবার যাচাই করে।") },
-      { name: "test.yml · deploy.yml", what: t("Python and web tests on every push; deploy to Cloudflare when its token is set.", "প্রতি push-এ Python ও ওয়েব টেস্ট; টোকেন থাকলে Cloudflare-এ ডিপ্লয়।"), why: t("Nothing broken reaches clients.", "ভাঙা কিছু গ্রাহকের কাছে পৌঁছায় না।") },
+      { name: "test.yml · deploy.yml", what: t("Python, backend and frontend tests on every push; deploy.yml redeploys only the Worker whose folder (api/ or web/) changed.", "প্রতি push-এ Python, ব্যাকএন্ড ও ফ্রন্টএন্ড টেস্ট; deploy.yml শুধু সেই Worker আবার deploy করে যার ফোল্ডার (api/ বা web/) বদলেছে।"), why: t("Nothing broken reaches clients.", "ভাঙা কিছু গ্রাহকের কাছে পৌঁছায় না।") },
     ],
   },
   {

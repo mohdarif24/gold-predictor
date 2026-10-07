@@ -2,7 +2,7 @@
 
 Daily horizons use the factor checklist (the measured hit rate of past days that agreed at least as strongly in the same
 direction); intraday horizons map the model's raw probability onto its hold-out calibration. Below MIN_CASES similar
-cases, the plain base rate is used instead. The web app (web/lib/queries.ts getPublicSignal) mirrors this logic.
+cases, the plain base rate is used instead. The API (api/src/lib/queries.ts getPublicSignal) mirrors this logic.
 """
 
 MIN_CASES = 30

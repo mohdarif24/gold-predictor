@@ -148,21 +148,35 @@ else {
 Ok "workers.dev subdomain: $subdomain"
 
 # ---------------------------------------------------------------- 4. deploy
-Step "4/5  Deploy the website"
-if (Run-Workflow "deploy.yml") { Ok "deployed" } else { Fail "deploy failed. Open the run link above." }
+Step "4/5  Deploy the backend API and the frontend (two separate Workers)"
 $site = "https://gold-predictor.$subdomain.workers.dev"
+$api = "https://gold-predictor-api.$subdomain.workers.dev"
+Warn "api/wrangler.jsonc must list $site in ALLOWED_ORIGINS (edit and commit it if your subdomain differs)."
+if ($DryRun) { Write-Host "   [dry-run] gh variable set API_URL --body $api" }
+else {
+    & gh variable set API_URL --repo $Repo --body $api | Out-Null
+    if ($LASTEXITCODE -ne 0) { Fail "could not set the repository variable API_URL" }
+    Ok "repository variable API_URL = $api"
+}
+if (Run-Workflow "deploy.yml") { Ok "deployed" } else { Fail "deploy failed. Open the run link above." }
 
-if ($DryRun) { Write-Host "   [dry-run] wrangler secret put DATABASE_URL" }
+if ($DryRun) { Write-Host "   [dry-run] wrangler secret put DATABASE_URL / SESSION_SECRET / SETTINGS_KEY (backend)" }
 else {
     $env:CLOUDFLARE_API_TOKEN = $cfToken
     $env:CLOUDFLARE_ACCOUNT_ID = $cfAccount
-    Push-Location (Join-Path $root "web")
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()   # works on Windows PowerShell 5.1 and 7
+    $b1 = New-Object byte[] 36; $rng.GetBytes($b1); $session = [Convert]::ToBase64String($b1)
+    $b2 = New-Object byte[] 36; $rng.GetBytes($b2); $settings = [Convert]::ToBase64String($b2)
+    Push-Location (Join-Path $root "api")
     try {
         if (-not (Test-Path node_modules)) { & npm ci | Out-Null }
-        $dbUrl | & npx wrangler secret put DATABASE_URL | Out-Null
-        if ($LASTEXITCODE -ne 0) { Fail "could not set the Worker secret DATABASE_URL" }
-        Ok "Worker secret DATABASE_URL saved"
+        foreach ($pair in @(@("DATABASE_URL", $dbUrl), @("SESSION_SECRET", $session), @("SETTINGS_KEY", $settings))) {
+            $pair[1] | & npx wrangler secret put $pair[0] | Out-Null
+            if ($LASTEXITCODE -ne 0) { Fail "could not set the backend secret $($pair[0])" }
+            Ok "backend secret $($pair[0]) saved"
+        }
     } finally { Pop-Location }
+    Set-GhSecret "SETTINGS_KEY" $settings   # the scheduled jobs decrypt the AI key saved on the website with it
 }
 
 # ---------------------------------------------------------------- 5. access (login)
@@ -183,7 +197,7 @@ if ($team) {
     $aud = if ($DryRun) { "dry-run-aud" } else { (Read-Host -Prompt "Application Audience (AUD) tag").Trim() }
     if ($DryRun) { Write-Host "   [dry-run] wrangler secret put CF_ACCESS_TEAM_DOMAIN / CF_ACCESS_AUD" }
     else {
-        Push-Location (Join-Path $root "web")
+        Push-Location (Join-Path $root "api")
         try {
             $team -replace "^https?://", "" | & npx wrangler secret put CF_ACCESS_TEAM_DOMAIN | Out-Null
             $aud | & npx wrangler secret put CF_ACCESS_AUD | Out-Null

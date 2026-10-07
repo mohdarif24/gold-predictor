@@ -1,0 +1,10 @@
+# Local `npm run dev` (wrangler dev) variables. Copy to .dev.vars (git-ignored). Never commit real values.
+DATABASE_URL=postgresql://user:password@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require
+# The local frontend
+ALLOWED_ORIGINS=http://localhost:3000
+# Signed in as this super admin without a code; only for requests to localhost and never in production
+DEV_USER_EMAIL=you@example.com
+NODE_ENV=development
+# 32+ random characters each
+SESSION_SECRET=
+SETTINGS_KEY=

@@ -1,10 +1,11 @@
 name: deploy
 
-# Publishes the website to Cloudflare Workers whenever web/ changes on main.
+# Publishes the backend (api/, one Cloudflare Worker) and the frontend (web/, another Worker serving static files)
+# whenever either changes on main. Each only redeploys when its own folder changed.
 on:
   push:
     branches: [main]
-    paths: ["web/**", ".github/workflows/deploy.yml"]
+    paths: ["api/**", "web/**", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -15,33 +16,70 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.gate.outputs.ok }}
+      api: ${{ steps.diff.outputs.api }}
+      web: ${{ steps.diff.outputs.web }}
+    steps:
+      - id: gate
+        run: |
+          if [ -n "$S" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::CLOUDFLARE_API_TOKEN is not set yet, skipping. See docs/DEPLOY.md."; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+        env:
+          S: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "api=true" >> "$GITHUB_OUTPUT"; echo "web=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only HEAD~1 HEAD)
+          echo "api=$(echo "$files" | grep -qE '^(api/|\.github/workflows/deploy\.yml)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "web=$(echo "$files" | grep -qE '^(web/|\.github/workflows/deploy\.yml)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  api:
+    needs: changes
+    if: needs.changes.outputs.ok == 'true' && needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: npm ci
+      - run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.ok == 'true' && needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
         working-directory: web
     steps:
-      - id: gate
-        working-directory: .   # web/ does not exist yet: this step runs before checkout
-        run: |
-          if [ -n "$S" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::CLOUDFLARE_API_TOKEN is not set yet, skipping. See docs/DEPLOY.md."; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
-        env:
-          S: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.ok == 'true'
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.ok == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-        if: steps.gate.outputs.ok == 'true'
-      - run: npx opennextjs-cloudflare build
-        if: steps.gate.outputs.ok == 'true'
-      - run: npx opennextjs-cloudflare deploy
-        if: steps.gate.outputs.ok == 'true'
+      # the API address is baked into the static files; set the repository variable API_URL (Settings > Variables)
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.API_URL }}
+      - run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

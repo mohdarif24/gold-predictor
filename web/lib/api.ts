@@ -9,8 +9,19 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The backend is a separate service (../api). Its address is fixed at build time; the session cookie it sets travels
+ * with every call because of `credentials: "include"` (the two hosts share one site, see api/README.md).
+ */
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+
+/** A raw call to the backend, for the few places that need the Response itself (sign-in, sign-out). */
+export function apiRequest(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_URL}/api/${path}`, { ...init, credentials: "include", headers: { "Content-Type": "application/json" } });
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/${path}`, { ...init, headers: { "Content-Type": "application/json" } });
+  const res = await apiRequest(path, init);
   if (res.status === 401) {
     // not signed in (or the code was revoked): go to the sign-in page
     // full reload on purpose: drops any state from the old session

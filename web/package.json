@@ -4,24 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && node scripts/postbuild.mjs",
     "lint": "eslint",
-    "test": "vitest run",
-    "cf:build": "opennextjs-cloudflare build",
-    "cf:deploy": "opennextjs-cloudflare deploy"
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.2.0",
-    "jose": "^6.2.12",
     "lightweight-charts": "^5.2.1",
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
-    "@opennextjs/cloudflare": "^1.20.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -30,7 +23,6 @@
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.11",
     "wrangler": "^4.147.0"
   }
 }

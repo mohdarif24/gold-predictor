@@ -78,12 +78,13 @@ Two tests guard the procedure itself: a pure random walk must never get an edge,
 ## System
 
 ```text
-GitHub Actions (every 15 min)  ->  Neon Postgres  <-  Cloudflare Workers (website + API)
-   Python: predict.yml, train.yml,  predictions, models,    sign-in: access codes or Cloudflare Access
-   research.yml (monthly study)     research, news, candles
+GitHub Actions (every 15 min)  ->  Neon Postgres  <-  API (backend Worker)  <-  Frontend (static Worker)
+   Python: predict.yml, train.yml,  predictions, models,   api/: JSON, sign-in,     web/: Next.js static pages
+   research.yml (monthly study)     research, news, ...    roles, admin settings    in the browser
 ```
 
-The Python jobs write to the database; the Next.js site only reads it. The site is in English and Bengali and has: a card per time window with the reason in plain words, a **What moves gold** screen (model accuracy with its range, how much of the reading comes from the latest data versus background, what each family of inputs is pushing, the biggest single inputs, how reliable confident calls were, and the live state of every market input with the reason it matters), **News & events**, a price chart, history, practice-trade results, and Telegram or email alerts for new Buy/Sell signals. Sign-in is either Cloudflare Access or personal access codes (`scripts/access_code.py`); every API call re-checks it.
+The Python jobs write to the database. The backend API (`api/`, its own Cloudflare Worker) reads it and checks sign-in and
+roles on every call; the frontend (`web/`, a separate Worker that only serves static files) calls the API from the browser. The site is in English and Bengali and has: a card per time window with the reason in plain words, a **What moves gold** screen (model accuracy with its range, how much of the reading comes from the latest data versus background, what each family of inputs is pushing, the biggest single inputs, how reliable confident calls were, and the live state of every market input with the reason it matters), **News & events**, a price chart, history, practice-trade results, and Telegram or email alerts for new Buy/Sell signals. Sign-in is either Cloudflare Access or personal access codes (`scripts/access_code.py`); every API call re-checks it.
 
 GitHub's scheduler is best-effort: runs can start 5-15 minutes late and an occasional one is skipped, and GitHub pauses schedules after 60 days without repository activity. This is a near-real-time tool, not a tick-by-tick one.
 
@@ -103,9 +104,9 @@ python -m pytest tests           # also set PGLITE_WORK_DIR to test against a re
 
 Numbers move slightly each time because the free data source keeps adding bars.
 
-To run the predictor and the website together on Windows, put `DATABASE_URL` (ideally a Neon test branch) in `.env` and in
-`web/.env.local` (with `DEV_USER_EMAIL` to sign in as super admin locally), then double-click `start-local.cmd`. It runs one
-prediction cycle and opens http://localhost:3000; `start-local.cmd -Loop` also keeps predicting every 15 minutes.
+To run everything together on Windows, fill `.env`, `api/.dev.vars` and `web/.env.local` from their `.example` files (ideally
+with a Neon test branch), then double-click `start-local.cmd`. It runs one prediction cycle, starts the API on port 8787 and
+the frontend on port 3000, and opens the browser; `start-local.cmd -Loop` also keeps predicting every 15 minutes.
 
 ## Layout
 
@@ -113,7 +114,8 @@ prediction cycle and opens http://localhost:3000; `start-local.cmd -Loop` also k
 - `research/study.py`: the locked hold-out study
 - `nse_etf/yf_data.py`, `xauusd/mt5_data.py`: price sources
 - `config.yaml`: instruments, horizons, thresholds, costs, market inputs
-- `web/`: the website (Next.js on Cloudflare Workers); `.github/workflows/`: schedules, study, tests, deploy
+- `api/`: the backend JSON API (Cloudflare Worker); `web/`: the frontend (static Next.js pages on another Worker)
+- `.github/workflows/`: schedules, study, tests, deploy
 - `docs/study_guide_bn.md`: a Bengali study guide to the concepts behind the system
 
 ## License

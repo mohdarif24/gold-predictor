@@ -1,6 +1,0 @@
-# Local `wrangler dev` / `next dev` variables. Copy to .dev.vars (git-ignored). Never commit real values.
-DATABASE_URL=postgresql://user:password@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require
-# Skip Cloudflare Access locally by pretending to be this user (ignored in production builds)
-DEV_USER_EMAIL=you@example.com
-# Encrypts the AI key saved on the Model API page; the scheduled jobs need the same value (32+ random characters)
-SETTINGS_KEY=

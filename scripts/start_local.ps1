@@ -1,10 +1,14 @@
 <#
-  Run everything on this computer: one prediction cycle, then the website at http://localhost:3000.
+  Run everything on this computer: one prediction cycle, then the backend API (http://localhost:8787) and the frontend
+  (http://localhost:3000), each in its own window, like the two separate hosts in production.
 
-  Needs .env (repo root) and web\.env.local with DATABASE_URL (see .env.example and web\.dev.vars.example).
-  Use a Neon test branch there, not the live database, so local readings do not mix with the live Prediction Log.
+  Needs (all git-ignored):
+    .env              DATABASE_URL for the Python jobs (see .env.example)
+    api\.dev.vars     DATABASE_URL, ALLOWED_ORIGINS, DEV_USER_EMAIL, SESSION_SECRET, SETTINGS_KEY (see api\.dev.vars.example)
+    web\.env.local    NEXT_PUBLIC_API_URL=http://localhost:8787 (see web\.env.example)
+  Use a Neon test branch, not the live database, so local readings do not mix with the live Prediction Log.
 
-  Usage:  .\scripts\start_local.ps1          (one prediction cycle, then the website)
+  Usage:  .\scripts\start_local.ps1          (one prediction cycle, then API + website)
           .\scripts\start_local.ps1 -Loop    (also keeps predicting every 15 minutes in its own window)
           .\scripts\start_local.ps1 -SkipTick
 #>
@@ -14,12 +18,14 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-foreach ($f in ".env", "web\.env.local") {
-    if (-not (Test-Path $f)) { Write-Host "Missing $f (needs DATABASE_URL). See docs/DEPLOY.md." -ForegroundColor Red; exit 1 }
+foreach ($f in ".env", "api\.dev.vars", "web\.env.local") {
+    if (-not (Test-Path $f)) { Write-Host "Missing $f. See the comments at the top of this script." -ForegroundColor Red; exit 1 }
 }
-if (-not (Test-Path "web\node_modules")) {
-    Write-Host "Installing website packages (first time only)..." -ForegroundColor Cyan
-    Push-Location web; npm install; Pop-Location
+foreach ($d in "api", "web") {
+    if (-not (Test-Path "$d\node_modules")) {
+        Write-Host "Installing $d packages (first time only)..." -ForegroundColor Cyan
+        Push-Location $d; npm install; Pop-Location
+    }
 }
 
 if (-not $SkipTick) {
@@ -31,10 +37,19 @@ if ($Loop) {
     Write-Host "Predicting every 15 minutes in a separate window (close it to stop)." -ForegroundColor Cyan
 }
 
-Write-Host "Starting the website..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$root\web'; npm run dev"
-for ($i = 0; $i -lt 60; $i++) {
-    try { Invoke-WebRequest -Uri "http://localhost:3000/login" -UseBasicParsing -TimeoutSec 2 | Out-Null; break } catch { Start-Sleep -Seconds 2 }
+function Wait-Up($url) {
+    for ($i = 0; $i -lt 150; $i++) {  # up to 5 minutes: the first `wrangler dev` downloads its local runtime
+        try { Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 | Out-Null; return $true } catch { Start-Sleep -Seconds 2 }
+    }
+    return $false
 }
+
+Write-Host "Starting the backend API (port 8787)..." -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$root\api'; npm run dev"
+if (-not (Wait-Up "http://localhost:8787/api/health")) { Write-Host "The API did not start; look at its window." -ForegroundColor Red; exit 1 }
+
+Write-Host "Starting the frontend (port 3000)..." -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$root\web'; npm run dev"
+Wait-Up "http://localhost:3000/login" | Out-Null
 Start-Process "http://localhost:3000"
-Write-Host "Open: http://localhost:3000  (close the website window to stop it)" -ForegroundColor Green
+Write-Host "Frontend: http://localhost:3000   API: http://localhost:8787   (close their windows to stop)" -ForegroundColor Green

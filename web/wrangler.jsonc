@@ -1,23 +1,12 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"main": ".open-next/worker.js",
+	// The frontend: static files only (no server code). The backend API is the separate Worker in ../api.
 	"name": "gold-predictor",
 	"compatibility_date": "2026-09-01",
-	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 	"assets": {
-		"directory": ".open-next/assets",
-		"binding": "ASSETS"
-	},
-	"services": [
-		{
-			// self-reference binding required by the OpenNext adapter; the name must equal "name" above
-			"binding": "WORKER_SELF_REFERENCE",
-			"service": "gold-predictor"
-		}
-	],
-	"vars": {
-		"NEXT_PUBLIC_APP_NAME": "Gold Predictor"
-		// Set these two in the Cloudflare dashboard or with `wrangler secret put` (see ../docs/DEPLOY.md):
-		//   DATABASE_URL, CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD
+		"directory": "./out",
+		// /logs serves out/logs.html; unknown paths get out/404.html
+		"html_handling": "auto-trailing-slash",
+		"not_found_handling": "404-page"
 	}
 }
