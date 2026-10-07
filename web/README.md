@@ -7,7 +7,7 @@ signed Access token (`lib/access.ts`).
 ```bash
 npm install
 npm test                      # query tests on a local Postgres engine + token-check tests
-npm run dev                   # needs .dev.vars (copy .dev.vars.example): DATABASE_URL and DEV_USER_EMAIL
+npm run dev                   # needs .env.local with DATABASE_URL and DEV_USER_EMAIL (same keys as .dev.vars.example)
 npm run cf:build              # production bundle for Workers (.open-next/)
 ```
 

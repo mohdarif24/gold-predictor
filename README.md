@@ -103,6 +103,10 @@ python -m pytest tests           # also set PGLITE_WORK_DIR to test against a re
 
 Numbers move slightly each time because the free data source keeps adding bars.
 
+To run the predictor and the website together on Windows, put `DATABASE_URL` (ideally a Neon test branch) in `.env` and in
+`web/.env.local` (with `DEV_USER_EMAIL` to sign in as super admin locally), then double-click `start-local.cmd`. It runs one
+prediction cycle and opens http://localhost:3000; `start-local.cmd -Loop` also keeps predicting every 15 minutes.
+
 ## Layout
 
 - `core/`: features, regime rules, models, backtest, signal rules, practice trading, explanations, news, database layer, alerts
