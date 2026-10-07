@@ -113,7 +113,7 @@ def build(cfg: dict, db=None) -> dict:
                 "refresh": "with the news", "params": []})
 
     llm_saved = settings.get_all(db) if db is not None else {}
-    src.append({"id": "llm", "group": "ai", "name": "AI model for news scoring and the AI mentor (OpenAI-compatible chat API)",
+    src.append({"id": "llm", "group": "ai", "name": "AI model for news scoring and the AI advisor chat (OpenAI-compatible chat API)",
                 "url": llm_saved.get("llm_url") or os.getenv("LLM_API_URL") or settings.DEFAULT_URL,
                 "method": "HTTP POST chat/completions (temperature 0)", "code": "core/news.py score_llm()",
                 "auth": "Model API page (encrypted) or env LLM_API_KEY",

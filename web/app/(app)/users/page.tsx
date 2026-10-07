@@ -1,18 +1,34 @@
 "use client";
 import { useState } from "react";
 import { AdminOnly } from "@/components/AdminOnly";
+import { PAGE_PERMS } from "@/components/AppShell";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Card, PageTitle, Skeleton } from "@/components/ui";
 import { type AdminUser, ApiError, apiFetch, useApi } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 
+/** One tick per super-admin page: the person can open it read-only. */
+function PageTicks({ selected, onToggle, label }: { selected: string[]; onToggle: (perm: string, on: boolean) => void; label: string }) {
+  const { t } = useT();
+  return (
+    <div role="group" aria-label={label} className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 md:grid-cols-3">
+      {PAGE_PERMS.map((p) => (
+        <label key={p.perm} className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={selected.includes(p.perm)} onChange={(e) => onToggle(p.perm, e.target.checked)} className="h-4 w-4" />
+          {t(p.key)}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function UsersInner() {
   const { t, lang, num } = useT();
   const list = useApi<AdminUser[]>("admin/users");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
-  const [logs, setLogs] = useState(false);
+  const [pages, setPages] = useState<string[]>([]);
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [code, setCode] = useState("");
   const [made, setMade] = useState<{ email: string; code: string } | null>(null);
@@ -27,7 +43,7 @@ function UsersInner() {
     setErr("");
     setMade(null);
     try {
-      const payload = { email, role, perms: logs ? ["logs"] : [], ...(mode === "manual" ? { code } : {}) };
+      const payload = { email, role, perms: role === "user" ? pages : [], ...(mode === "manual" ? { code } : {}) };
       setMade(await apiFetch<{ email: string; code: string }>("admin/users", { method: "POST", body: JSON.stringify(payload) }));
       setEmail("");
       setCode("");
@@ -60,7 +76,7 @@ function UsersInner() {
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex max-w-4xl flex-col gap-6">
       <PageTitle title={t("users.title")} sub={t("users.sub")} />
       <Card>
         <form onSubmit={add} className="flex flex-wrap items-end gap-3">
@@ -95,10 +111,12 @@ function UsersInner() {
             ) : null}
           </fieldset>
           {role === "user" ? (
-            <label className="flex basis-full items-center gap-2 text-sm">
-              <input type="checkbox" checked={logs} onChange={(e) => setLogs(e.target.checked)} className="h-4 w-4" />
-              {t("users.perm.logs")}
-            </label>
+            <fieldset className="basis-full">
+              <legend className="mb-1 text-sm font-medium">{t("users.pages")}</legend>
+              <p className="mb-2 text-xs text-muted">{t("users.pages.help")}</p>
+              <PageTicks selected={pages} label={t("users.pages")}
+                onToggle={(p, on) => setPages((s) => (on ? [...new Set([...s, p])] : s.filter((x) => x !== p)))} />
+            </fieldset>
           ) : null}
           <button type="submit" disabled={busy} className="rounded-lg bg-brass px-4 py-2 font-semibold text-bg disabled:opacity-60">
             {t("users.add")}
@@ -130,7 +148,7 @@ function UsersInner() {
                 <tr className="border-b border-line">
                   <th className="px-5 py-3 font-medium">{t("login.email")}</th>
                   <th className="px-5 py-3 font-medium">{t("users.role")}</th>
-                  <th className="px-5 py-3 font-medium">{t("nav.logs")}</th>
+                  <th className="px-5 py-3 font-medium">{t("users.pages")}</th>
                   <th className="px-5 py-3 font-medium">{t("users.lastused")}</th>
                   <th className="px-5 py-3" />
                 </tr>
@@ -146,11 +164,14 @@ function UsersInner() {
                       {u.role === "admin" ? (
                         <span className="text-xs text-muted">{t("users.perm.always")}</span>
                       ) : (
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" checked={u.perms.includes("logs")} onChange={(e) => setPerm(u, "logs", e.target.checked)}
-                            className="h-4 w-4" aria-label={`${t("users.perm.logs")}: ${u.email}`} />
-                          <span className="text-xs">{u.perms.includes("logs") ? t("users.perm.on") : t("users.perm.off")}</span>
-                        </label>
+                        <details>
+                          <summary className="cursor-pointer text-xs font-medium">
+                            {t("users.pages.count", { n: u.perms.length, total: PAGE_PERMS.length })}
+                          </summary>
+                          <div className="mt-2 min-w-[18rem]">
+                            <PageTicks selected={u.perms} label={`${t("users.pages")}: ${u.email}`} onToggle={(p, on) => setPerm(u, p, on)} />
+                          </div>
+                        </details>
                       )}
                     </td>
                     <td className="px-5 py-3 text-muted">{u.last_used ? num(fmtDateTime(u.last_used, lang)) : "-"}</td>

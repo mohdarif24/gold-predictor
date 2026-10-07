@@ -78,7 +78,7 @@ function ApiLogsInner() {
 
 export default function ApiLogsPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="apilogs">
       <ApiLogsInner />
     </AdminOnly>
   );

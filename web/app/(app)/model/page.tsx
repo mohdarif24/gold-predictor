@@ -123,7 +123,7 @@ function ModelInner() {
 
 export default function ModelPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="model">
       <ModelInner />
     </AdminOnly>
   );

@@ -126,7 +126,7 @@ function DashboardInner() {
 
 export default function Dashboard() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="dashboard">
       <DashboardInner />
     </AdminOnly>
   );

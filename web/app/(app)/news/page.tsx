@@ -96,7 +96,7 @@ function NewsPageInner() {
 
 export default function NewsPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="news">
       <NewsPageInner />
     </AdminOnly>
   );

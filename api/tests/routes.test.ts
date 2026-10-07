@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { corsHeaders } from "../src/lib/http";
+import { PERMS } from "../src/lib/queries";
 import { ROUTES, match } from "../src/routes";
 
 const FRONT = "https://gold-predictor.example.workers.dev";
@@ -25,10 +26,15 @@ describe("router", () => {
     expect(match("GET", "/api/logs/")).toBeNull();
   });
 
-  it("labels every admin path as admin-only and every other path sensibly", () => {
-    for (const [, path, access] of ROUTES) {
-      if (path.startsWith("/api/admin/")) expect(access).toBe("admin");
+  it("keeps every change super-admin only; pages given to a person open reading only", () => {
+    for (const [method, path, access] of ROUTES) {
+      if (path.startsWith("/api/admin/") && method !== "GET") expect(access).toBe("admin"); // people, AI settings, tests
+      if (path === "/api/admin/users") expect(access).toBe("admin"); // even reading the people list
       if (["/api/login", "/api/logout", "/api/health"].includes(path)) expect(access).toBe("open");
+      if (access.startsWith("page:")) {
+        for (const p of access.slice(5).split("|")) expect(PERMS).toContain(p);
+        if (!path.startsWith("/api/advisor")) expect(method).toBe("GET"); // the advisor's own chat is the only write
+      }
     }
   });
 

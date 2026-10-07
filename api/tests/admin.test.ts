@@ -73,19 +73,6 @@ describe("roles", () => {
   });
 });
 
-describe("AI mentor", () => {
-  it("returns the newest comments with their verification flag, newest first", async () => {
-    const body = (h: string) => JSON.stringify({ en: { headline: h }, bn: { headline: h } });
-    await insert("mentor_comments", { ts: "2026-10-07T10:00:00+00:00", instrument: "gold", model: "m", body: body("first"), grounded: 1, issues: "" });
-    await insert("mentor_comments", { ts: "2026-10-07T10:15:00+00:00", instrument: "gold", model: "m", body: body("second"), grounded: 0, issues: "4300" });
-    await insert("mentor_comments", { ts: "2026-10-07T10:15:00+00:00", instrument: "etf", model: "m", body: "not json", grounded: 1, issues: "" });
-    const c = await admin.getMentor(run, "gold");
-    expect(c.map((x) => (x.body as { en: { headline: string } }).en.headline)).toEqual(["second", "first"]);
-    expect(c[0]).toMatchObject({ grounded: false, issues: "4300" });
-    expect((await admin.getMentor(run, "etf"))[0].body).toBeNull();
-  });
-});
-
 describe("data & APIs catalog", () => {
   it("returns the jobs' inventory and this API's environment without any secret value", async () => {
     process.env.ALLOWED_ORIGINS = "https://front.example";
@@ -238,7 +225,10 @@ describe("model API settings", () => {
     expect(sentAuth).toBe("Bearer sk-live-1111");
 
     const quota: typeof fetch = async () => new Response('{"error":"rate limit"}', { status: 429 });
-    expect(await admin.testLlm(run, { model: "other" }, quota)).toMatchObject({ ok: false, status: 429, error: "HTTP 429" });
+    expect(await admin.testLlm(run, { model: "other" }, quota)).toMatchObject({ ok: false, status: 429, error: "HTTP 429: rate limit" });
+    // the provider's own words reach the screen (DeepSeek's reply when the account has no credit)
+    expect(admin.providerMessage('{"error":{"message":"Insufficient Balance (request_id: abc-123)","code":"invalid_request_error"}}'))
+      .toBe(": Insufficient Balance");
     const down: typeof fetch = async () => { throw new TypeError("fetch failed"); };
     expect(await admin.testLlm(run, {}, down)).toMatchObject({ ok: false, status: null });
 

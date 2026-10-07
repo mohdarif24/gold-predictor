@@ -244,7 +244,7 @@ function SourcesInner() {
 
 export default function SourcesPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="sources">
       <SourcesInner />
     </AdminOnly>
   );

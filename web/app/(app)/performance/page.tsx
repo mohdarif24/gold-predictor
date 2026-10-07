@@ -95,7 +95,7 @@ function PerformancePageInner() {
 
 export default function PerformancePage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="performance">
       <PerformancePageInner />
     </AdminOnly>
   );

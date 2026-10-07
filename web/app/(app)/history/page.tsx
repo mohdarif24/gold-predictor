@@ -60,7 +60,7 @@ function HistoryPageInner() {
 
 export default function HistoryPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="history">
       <HistoryPageInner />
     </AdminOnly>
   );

@@ -20,7 +20,7 @@ export async function listInstruments(run: Run) {
   return rows.map((r) => ({ id: r.id, label: r.label, horizons: JSON.parse(r.horizons) as string[] }));
 }
 
-async function requireInstrument(run: Run, name: string) {
+export async function requireInstrument(run: Run, name: string) {
   const rows = await run<{ label: string; horizons: string }>(
     "SELECT label, horizons FROM instruments WHERE id = $1 AND enabled = 1",
     [name],
@@ -263,8 +263,12 @@ export async function hasAccessCode(run: Run, email: string): Promise<boolean> {
   return (await roleOf(run, email)) !== null;
 }
 
-/** Extra pages the super admin can open to a client, one switch each on the Users page. */
-export const PERMS = ["logs"] as const;
+/**
+ * Super-admin pages that can be opened to a client, read-only, one tick each on the Users page. Changing anything
+ * (people, the AI provider) always stays with the super admin; "advisor" lets the person chat with the AI advisor.
+ */
+export const PERMS = ["dashboard", "advisor", "logs", "checklist", "drivers", "news", "performance", "history", "model", "notebook",
+  "sources", "apisettings", "apilogs"] as const;
 export type Perm = (typeof PERMS)[number];
 
 export function parsePerms(s: string | null | undefined): Perm[] {

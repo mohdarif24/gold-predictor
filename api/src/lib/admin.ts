@@ -94,24 +94,6 @@ export async function getCatalog(run: Run, apiOrigin: string, routes: RouteInfo[
   return { jobs, jobs_updated: rows[0]?.updated ?? null, api: { origin: apiOrigin, env, routes } };
 }
 
-/** The AI mentor's newest comments for one instrument (written by core/mentor.py on every new reading). */
-export async function getMentor(run: Run, name: string, limit = 20) {
-  const n = Math.max(1, Math.min(Number.isFinite(limit) ? limit : 20, 100));
-  const rows = await run<{ id: number; ts: string; model: string; body: string; grounded: number; issues: string | null }>(
-    "SELECT id::int AS id, ts, model, body, grounded, issues FROM mentor_comments WHERE instrument = $1 ORDER BY id DESC LIMIT $2",
-    [name, n],
-  );
-  return rows.map((r) => {
-    let body: unknown = null;
-    try {
-      body = JSON.parse(r.body);
-    } catch {
-      body = null;
-    }
-    return { id: r.id, ts: r.ts, model: r.model, grounded: Boolean(r.grounded), issues: r.issues || null, body };
-  });
-}
-
 /** Turn a client's extra pages on or off without giving them a new code. */
 export async function setUserPerms(run: Run, email: string, perms: unknown) {
   const clean = cleanPerms(perms);
@@ -217,6 +199,30 @@ export async function getApiLogs(run: Run, opts: { limit?: number; failed?: bool
  * Send one tiny request to the provider (the saved one, or the values typed but not yet saved) and log the answer.
  * `fetcher` is injectable for tests.
  */
+/** The provider's own explanation (e.g. "Insufficient Balance", "invalid API key"), so the person knows what to fix. */
+export function providerMessage(body: string): string {
+  try {
+    const e = JSON.parse(body)?.error;
+    const msg = typeof e === "string" ? e : e?.message;
+    return msg ? `: ${String(msg).replace(/\s*\(request_id:[^)]*\)/, "").slice(0, 160)}` : "";
+  } catch {
+    return "";
+  }
+}
+
+/** The saved AI provider ready to call, or null when it is switched off or has no key stored on the Model API page. */
+export async function resolveLlm(run: Run): Promise<{ url: string; model: string; key: string } | null> {
+  const s = await settingsMap(run);
+  if (s.get("llm_enabled")?.value === "0" || !s.get("llm_key_enc")) return null;
+  let key: string;
+  try {
+    key = await decrypt(s.get("llm_key_enc")!.value);
+  } catch {
+    throw new HttpError(400, "the saved AI key cannot be read (SETTINGS_KEY changed?). Enter it again on the Model API page.");
+  }
+  return { url: checkUrl(s.get("llm_url")?.value || DEFAULT_LLM.url), model: s.get("llm_model")?.value || DEFAULT_LLM.model, key };
+}
+
 export async function testLlm(run: Run, body: { url?: string; model?: string; key?: string }, fetcher: typeof fetch = fetch) {
   const saved = await settingsMap(run);
   const url = checkUrl((body.url?.trim() || saved.get("llm_url")?.value || DEFAULT_LLM.url));
@@ -240,7 +246,7 @@ export async function testLlm(run: Run, body: { url?: string; model?: string; ke
     const r = await fetcher(url, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: request, signal: AbortSignal.timeout(30_000) });
     status = r.status;
     text = await r.text();
-    if (!r.ok) error = `HTTP ${r.status}`;
+    if (!r.ok) error = `HTTP ${r.status}${providerMessage(text)}`;
   } catch (e) {
     error = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
   }

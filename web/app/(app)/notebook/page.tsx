@@ -136,7 +136,7 @@ function NotebookInner() {
 
 export default function NotebookPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="notebook">
       <NotebookInner />
     </AdminOnly>
   );

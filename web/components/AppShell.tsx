@@ -7,33 +7,31 @@ import { setLang, useT, type Key } from "@/lib/i18n";
 import { useInstrument } from "@/lib/instrument";
 import { useMe } from "@/lib/role";
 
-type NavItem = { href: string; key: Key };
+/** perm: the page permission that opens it to a client (read-only); "admin": the super admin's alone; none: everyone. */
+type NavItem = { href: string; key: Key; perm?: string };
 
-/** Clients see only the plain signal; the super admin sees every screen. */
-const USER_NAV: NavItem[] = [
+const NAV: NavItem[] = [
   { href: "/", key: "nav.signal" },
+  { href: "/advisor", key: "nav.advisor", perm: "advisor" },
+  { href: "/dashboard", key: "nav.dashboard", perm: "dashboard" },
+  { href: "/logs", key: "nav.logs", perm: "logs" },
+  { href: "/checklist", key: "nav.checklist", perm: "checklist" },
+  { href: "/drivers", key: "nav.drivers", perm: "drivers" },
+  { href: "/news", key: "nav.news", perm: "news" },
+  { href: "/performance", key: "nav.performance", perm: "performance" },
+  { href: "/history", key: "nav.history", perm: "history" },
+  { href: "/model", key: "nav.model", perm: "model" },
+  { href: "/notebook", key: "nav.notebook", perm: "notebook" },
+  { href: "/sources", key: "nav.sources", perm: "sources" },
+  { href: "/api-settings", key: "nav.apisettings", perm: "apisettings" },
+  { href: "/api-logs", key: "nav.apilogs", perm: "apilogs" },
+  { href: "/users", key: "nav.users", perm: "admin" },
   { href: "/settings", key: "nav.settings" },
   { href: "/about", key: "nav.about" },
 ];
-const ADMIN_NAV: NavItem[] = [
-  { href: "/", key: "nav.signal" },
-  { href: "/mentor", key: "nav.mentor" },
-  { href: "/dashboard", key: "nav.dashboard" },
-  { href: "/logs", key: "nav.logs" },
-  { href: "/checklist", key: "nav.checklist" },
-  { href: "/drivers", key: "nav.drivers" },
-  { href: "/news", key: "nav.news" },
-  { href: "/performance", key: "nav.performance" },
-  { href: "/history", key: "nav.history" },
-  { href: "/model", key: "nav.model" },
-  { href: "/notebook", key: "nav.notebook" },
-  { href: "/sources", key: "nav.sources" },
-  { href: "/api-settings", key: "nav.apisettings" },
-  { href: "/api-logs", key: "nav.apilogs" },
-  { href: "/users", key: "nav.users" },
-  { href: "/settings", key: "nav.settings" },
-  { href: "/about", key: "nav.about" },
-];
+
+/** The pages a super admin can tick for each person on the Users page, in menu order (with their menu names). */
+export const PAGE_PERMS = NAV.filter((n) => n.perm && n.perm !== "admin").map((n) => ({ perm: n.perm!, key: n.key }));
 
 export function LangToggle() {
   const { lang } = useT();
@@ -59,12 +57,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const { list, current, select } = useInstrument();
   const { data: me } = useMe();
-  const nav =
-    me?.role === "admin"
-      ? ADMIN_NAV
-      : me?.perms?.includes("logs")
-        ? [USER_NAV[0], { href: "/logs", key: "nav.logs" as Key }, ...USER_NAV.slice(1)]
-        : USER_NAV;
+  // the super admin sees every screen; a client sees the signal plus the pages the super admin ticked for them
+  const nav = NAV.filter((n) => !n.perm || me?.role === "admin" || (n.perm !== "admin" && (me?.perms ?? []).includes(n.perm)));
 
   return (
     <div className="flex min-h-screen flex-col">

@@ -251,7 +251,7 @@ function DriversPageInner() {
 
 export default function DriversPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="drivers">
       <DriversPageInner />
     </AdminOnly>
   );

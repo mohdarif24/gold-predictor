@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
+import { useMe } from "@/lib/role";
 
 // OpenAI-compatible providers (any other one works too: type its address and model). Model names change over time:
 // edit them if a provider renames one. One model serves both news scoring and the AI mentor.
@@ -75,6 +76,7 @@ function SettingsForm({ s, reload }: { s: LlmSettings; reload: () => void }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [test, setTest] = useState<LlmTest | null>(null);
   const [busy, setBusy] = useState<"" | "save" | "test">("");
+  const admin = useMe().data?.role === "admin";
 
   const err = (ex: unknown) =>
     ex instanceof ApiError ? ex.message : t("error.generic");
@@ -115,6 +117,9 @@ function SettingsForm({ s, reload }: { s: LlmSettings; reload: () => void }) {
 
   return (
     <Card className="flex flex-col gap-4">
+      {!admin ? <p className="rounded-lg bg-wait-soft p-3 text-sm text-wait">🔒 {t("api.readonly")}</p> : null}
+      {/* a person given this page reads it; only the super admin can change or test the provider */}
+      <fieldset disabled={!admin} className="contents">
       {!s.encryption_ready ? (
         <p className="rounded-lg bg-wait-soft p-3 text-sm text-wait">
           {t("api.noenc")}
@@ -256,13 +261,14 @@ function SettingsForm({ s, reload }: { s: LlmSettings; reload: () => void }) {
           })}
         </p>
       ) : null}
+      </fieldset>
     </Card>
   );
 }
 
 export default function ApiSettingsPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="apisettings">
       <SettingsInner />
     </AdminOnly>
   );

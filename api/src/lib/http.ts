@@ -21,11 +21,12 @@ function accessAdmin(email: string): boolean {
 
 /**
  * Wraps an API handler: checks the sign-in and the role, turns errors into clean JSON.
- * `admin`: super admin only. `perm`: super admin, or a client the super admin gave that page to.
+ * `admin`: super admin only. `perm`: super admin, or a client the super admin gave that page (or one of those pages) to.
  * A session is only as good as the access code behind it, so role and pages are re-read on every request: revoking a
  * code or changing a switch on the Users page takes effect at once.
  */
-export function secured(handler: (ctx: Ctx) => Promise<unknown> | unknown, opts: { admin?: boolean; perm?: Perm } = {}): Handler {
+export function secured(handler: (ctx: Ctx) => Promise<unknown> | unknown, opts: { admin?: boolean; perm?: Perm | Perm[] } = {}): Handler {
+  const need = opts.perm === undefined ? [] : Array.isArray(opts.perm) ? opts.perm : [opts.perm];
   return async (req, params) => {
     const who = await caller(req);
     if (!who) return json({ detail: "not signed in" }, 401);
@@ -39,7 +40,8 @@ export function secured(handler: (ctx: Ctx) => Promise<unknown> | unknown, opts:
       } else {
         role = who.via === "dev" || accessAdmin(who.email) ? "admin" : "user";
       }
-      const allowed = role === "admin" || (!opts.admin && (!opts.perm || perms.includes(opts.perm)));
+      // a page given by the super admin opens the data behind it (any one of the listed pages is enough)
+      const allowed = role === "admin" || (!opts.admin && (!need.length || need.some((p) => perms.includes(p))));
       if (!allowed) return json({ detail: "administrators only" }, 403);
       return json(await handler({ req, email: who.email, role, perms, run, params }));
     } catch (e) {

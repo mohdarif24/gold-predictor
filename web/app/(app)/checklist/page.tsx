@@ -134,7 +134,7 @@ function ChecklistPageInner() {
 
 export default function ChecklistPage() {
   return (
-    <AdminOnly>
+    <AdminOnly perm="checklist">
       <ChecklistPageInner />
     </AdminOnly>
   );
