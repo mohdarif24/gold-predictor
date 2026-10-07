@@ -73,6 +73,26 @@ describe("roles", () => {
   });
 });
 
+describe("data & APIs catalog", () => {
+  it("returns the jobs' inventory and this API's environment without any secret value", async () => {
+    process.env.ALLOWED_ORIGINS = "https://front.example";
+    process.env.SESSION_SECRET = "s".repeat(40);
+    await run("INSERT INTO app_settings(name, value, updated, updated_by) VALUES('catalog', $1, 'now', 'script')",
+      [JSON.stringify({ sources: [{ id: "fred", params: [{ name: "real_yield", value: "DFII10" }] }] })]);
+    const c = await admin.getCatalog(run, "https://api.example", [{ method: "GET", path: "/api/me", access: "signed-in" }]);
+    expect((c.jobs as { sources: { id: string }[] }).sources[0].id).toBe("fred");
+    const env = Object.fromEntries(c.api.env.map((e) => [e.name, e]));
+    expect(env.ALLOWED_ORIGINS).toMatchObject({ set: true, secret: false, value: "https://front.example" });
+    expect(env.SESSION_SECRET).toMatchObject({ set: true, secret: true, value: null });
+    expect(env.SETTINGS_KEY).toMatchObject({ set: true, value: null });
+    expect(JSON.stringify(c)).not.toContain("s".repeat(40));
+    expect(JSON.stringify(c)).not.toContain(KEY);
+    expect(c.api.routes).toHaveLength(1);
+    delete process.env.ALLOWED_ORIGINS;
+    delete process.env.SESSION_SECRET;
+  });
+});
+
 describe("creating access codes", () => {
   it("generates a strong code when none is typed, and stores only its hash", async () => {
     const r = await admin.createUser(run, { email: " New@X.com ", role: "user", perms: ["logs"] });

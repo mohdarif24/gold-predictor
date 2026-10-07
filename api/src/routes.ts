@@ -3,7 +3,7 @@
  * `secured(..., { admin: true })` = super admin only; `{ perm }` = super admin or a client given that page.
  */
 import { SESSION_COOKIE, SESSION_DAYS, createSession, hashCode } from "./lib/access";
-import { createUser, getApiLogs, getLlmSettings, listUsers, putLlmSettings, setUserPerms, testLlm } from "./lib/admin";
+import { createUser, getApiLogs, getCatalog, getLlmSettings, listUsers, putLlmSettings, setUserPerms, testLlm } from "./lib/admin";
 import { run } from "./lib/db";
 import { type Handler, json, secured } from "./lib/http";
 import {
@@ -40,24 +40,27 @@ const login: Handler = async (req) => {
 
 const logout: Handler = async (req) => json({ ok: true }, 200, { "Set-Cookie": sessionCookie(req, "", 0) });
 
-export const ROUTES: [method: string, path: string, handler: Handler][] = [
-  ["GET", "/api/health", async () => json({ ok: true, service: "gold-predictor-api" })],
-  ["POST", "/api/login", login],
-  ["POST", "/api/logout", logout],
+/** Who may call a route; shown on the super admin's "Data & APIs" page. The handler's secured() options enforce it. */
+export type Access = "open" | "signed-in" | "logs" | "admin";
+
+export const ROUTES: [method: string, path: string, access: Access, handler: Handler][] = [
+  ["GET", "/api/health", "open", async () => json({ ok: true, service: "gold-predictor-api" })],
+  ["POST", "/api/login", "open", login],
+  ["POST", "/api/logout", "open", logout],
 
   // everyone who is signed in
-  ["GET", "/api/me", secured(({ email, role, perms }) => ({ email, role, perms }))],
-  ["GET", "/api/instruments", secured(({ run }) => listInstruments(run))],
-  ["GET", "/api/public/:name", secured(({ run, params }) => getPublicSignal(run, params.name))],
-  ["GET", "/api/me/alerts", secured(({ email, run }) => getAlerts(run, email))],
-  ["PUT", "/api/me/alerts", secured(async ({ req, email, run }) => {
+  ["GET", "/api/me", "signed-in", secured(({ email, role, perms }) => ({ email, role, perms }))],
+  ["GET", "/api/instruments", "signed-in", secured(({ run }) => listInstruments(run))],
+  ["GET", "/api/public/:name", "signed-in", secured(({ run, params }) => getPublicSignal(run, params.name))],
+  ["GET", "/api/me/alerts", "signed-in", secured(({ email, run }) => getAlerts(run, email))],
+  ["PUT", "/api/me/alerts", "signed-in", secured(async ({ req, email, run }) => {
     const b = await body(req);
     if (!b || typeof b !== "object") throw new HttpError(400, "invalid request");
     return putAlerts(run, email, b);
   })],
 
   // super admin, or a client given the Prediction Logs page (clients get only what they were shown)
-  ["GET", "/api/logs/:name", secured(({ req, run, role, params }) => {
+  ["GET", "/api/logs/:name", "logs", secured(({ req, run, role, params }) => {
     const q = query(req);
     return getPredictionLog(run, params.name, {
       horizon: q.get("horizon"), period: q.get("period"), status: q.get("status"), limit: Number(q.get("limit") ?? 100),
@@ -66,27 +69,27 @@ export const ROUTES: [method: string, path: string, handler: Handler][] = [
   }, { perm: "logs" })],
 
   // super admin only
-  ["GET", "/api/signals/:name", secured(({ run, params }) => getSignals(run, params.name), { admin: true })],
-  ["GET", "/api/candles/:name", secured(({ req, run, params }) => {
+  ["GET", "/api/signals/:name", "admin", secured(({ run, params }) => getSignals(run, params.name), { admin: true })],
+  ["GET", "/api/candles/:name", "admin", secured(({ req, run, params }) => {
     const q = query(req);
     return getCandles(run, params.name, q.get("tf") ?? "D1", Number(q.get("limit") ?? 250));
   }, { admin: true })],
-  ["GET", "/api/trades/:name", secured(({ req, run, params }) => getTrades(run, params.name, Number(query(req).get("limit") ?? 50)), { admin: true })],
-  ["GET", "/api/history/:name", secured(({ req, run, params }) => getHistory(run, params.name, Number(query(req).get("limit") ?? 100)), { admin: true })],
-  ["GET", "/api/performance/:name", secured(({ run, params }) => getPerformance(run, params.name), { admin: true })],
-  ["GET", "/api/drivers/:name", secured(({ run, params }) => getDrivers(run, params.name), { admin: true })],
-  ["GET", "/api/checklist/:name", secured(({ run, params }) => getChecklist(run, params.name), { admin: true })],
-  ["GET", "/api/news", secured(({ run }) => getNews(run), { admin: true })],
+  ["GET", "/api/trades/:name", "admin", secured(({ req, run, params }) => getTrades(run, params.name, Number(query(req).get("limit") ?? 50)), { admin: true })],
+  ["GET", "/api/history/:name", "admin", secured(({ req, run, params }) => getHistory(run, params.name, Number(query(req).get("limit") ?? 100)), { admin: true })],
+  ["GET", "/api/performance/:name", "admin", secured(({ run, params }) => getPerformance(run, params.name), { admin: true })],
+  ["GET", "/api/drivers/:name", "admin", secured(({ run, params }) => getDrivers(run, params.name), { admin: true })],
+  ["GET", "/api/checklist/:name", "admin", secured(({ run, params }) => getChecklist(run, params.name), { admin: true })],
+  ["GET", "/api/news", "admin", secured(({ run }) => getNews(run), { admin: true })],
 
-  ["GET", "/api/admin/users", secured(({ run }) => listUsers(run), { admin: true })],
+  ["GET", "/api/admin/users", "admin", secured(({ run }) => listUsers(run), { admin: true })],
   // create a person (or give an existing person a new code): generated, or typed by the super admin; only the hash is stored
-  ["POST", "/api/admin/users", secured(async ({ req, run }) => createUser(run, (await body(req)) ?? {}), { admin: true })],
-  ["PATCH", "/api/admin/users", secured(async ({ req, run }) => {
+  ["POST", "/api/admin/users", "admin", secured(async ({ req, run }) => createUser(run, (await body(req)) ?? {}), { admin: true })],
+  ["PATCH", "/api/admin/users", "admin", secured(async ({ req, run }) => {
     const b = await body(req);
     return setUserPerms(run, String(b?.email ?? ""), b?.perms);
   }, { admin: true })],
   // you cannot remove yourself, so the site never ends up without an administrator by accident
-  ["DELETE", "/api/admin/users", secured(async ({ req, run, email: me }) => {
+  ["DELETE", "/api/admin/users", "admin", secured(async ({ req, run, email: me }) => {
     const email = String((await body(req))?.email ?? "").trim().toLowerCase();
     if (email === me) throw new HttpError(400, "you cannot remove your own access");
     const rows = await run("DELETE FROM access_codes WHERE email = $1 RETURNING email", [email]);
@@ -94,8 +97,8 @@ export const ROUTES: [method: string, path: string, handler: Handler][] = [
     return { ok: true };
   }, { admin: true })],
 
-  ["GET", "/api/admin/settings", secured(({ run }) => getLlmSettings(run), { admin: true })],
-  ["PUT", "/api/admin/settings", secured(async ({ req, run, email }) => {
+  ["GET", "/api/admin/settings", "admin", secured(({ run }) => getLlmSettings(run), { admin: true })],
+  ["PUT", "/api/admin/settings", "admin", secured(async ({ req, run, email }) => {
     const b = await body(req);
     if (!b || typeof b !== "object") throw new HttpError(400, "send the settings as JSON");
     return putLlmSettings(run, email, {
@@ -103,11 +106,12 @@ export const ROUTES: [method: string, path: string, handler: Handler][] = [
       enabled: typeof b.enabled === "boolean" ? b.enabled : undefined, clear_key: b.clear_key === true,
     });
   }, { admin: true })],
-  ["POST", "/api/admin/settings/test", secured(async ({ req, run }) => {
+  ["POST", "/api/admin/settings/test", "admin", secured(async ({ req, run }) => {
     const b = (await body(req)) ?? {};
     return testLlm(run, { url: str(b.url), model: str(b.model), key: str(b.key) });
   }, { admin: true })],
-  ["GET", "/api/admin/api-logs", secured(({ req, run }) => {
+  ["GET", "/api/admin/catalog", "admin", secured(({ req, run }) => getCatalog(run, new URL(req.url).origin, ROUTES.map(([m, p, a]) => ({ method: m, path: p, access: a }))), { admin: true })],
+  ["GET", "/api/admin/api-logs", "admin", secured(({ req, run }) => {
     const q = query(req);
     return getApiLogs(run, { limit: Number(q.get("limit") ?? 100), failed: q.get("failed") === "1" });
   }, { admin: true })],
@@ -117,7 +121,7 @@ export const ROUTES: [method: string, path: string, handler: Handler][] = [
 export function match(method: string, path: string): { handler: Handler; params: Record<string, string> } | "method" | null {
   const parts = path.replace(/\/+$/, "").split("/");
   let pathFound = false;
-  for (const [m, pattern, handler] of ROUTES) {
+  for (const [m, pattern, , handler] of ROUTES) {
     const want = pattern.split("/");
     if (want.length !== parts.length) continue;
     const params: Record<string, string> = {};

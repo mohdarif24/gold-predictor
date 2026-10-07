@@ -270,6 +270,7 @@ const en = {
   "nav.apilogs": "API Logs",
   "nav.model": "How the model works",
   "nav.notebook": "Arif’s Notebook",
+  "nav.sources": "Data & APIs",
   "nav.admin": "Super admin",
 
   "sig.title": "Will gold go higher or lower?",
@@ -642,6 +643,7 @@ const bn: Record<Key, string> = {
   "nav.apilogs": "API লগ",
   "nav.model": "মডেল কীভাবে কাজ করে",
   "nav.notebook": "আরিফের নোটবুক",
+  "nav.sources": "ডেটা ও API",
   "nav.admin": "সুপার অ্যাডমিন",
 
   "sig.title": "সোনার দাম বাড়বে না কমবে?",

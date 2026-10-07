@@ -26,6 +26,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/history", key: "nav.history" },
   { href: "/model", key: "nav.model" },
   { href: "/notebook", key: "nav.notebook" },
+  { href: "/sources", key: "nav.sources" },
   { href: "/api-settings", key: "nav.apisettings" },
   { href: "/api-logs", key: "nav.apilogs" },
   { href: "/users", key: "nav.users" },

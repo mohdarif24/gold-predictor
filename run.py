@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from core import alerts, news, pipeline, store
+from core import alerts, catalog, news, pipeline, settings, store
 
 try:  # local convenience only; CI passes real environment variables
     from dotenv import load_dotenv
@@ -115,6 +115,11 @@ def main():
 
     db = store.connect_cfg(cfg)
     store.sync_instruments(db, cfg)
+    try:  # the super admin's "Data & APIs" page reads this inventory (no secret values, only whether each is set)
+        settings.put(db, {"catalog": store.dumps(catalog.build(cfg, db))})
+    except Exception as e:
+        db.rollback()
+        print(f"catalog skipped: {e}", flush=True)
     if a.command == "init-db":
         print("database ready", flush=True)
         return

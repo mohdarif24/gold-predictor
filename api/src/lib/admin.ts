@@ -61,6 +61,39 @@ export async function createUser(run: Run, body: { email?: unknown; role?: unkno
   return { email, role, perms, code, typed: Boolean(typed) };
 }
 
+/** Environment of this backend Worker: name -> (purpose, secret?). Secret values are never returned, only whether set. */
+const API_ENV: Record<string, [string, boolean]> = {
+  DATABASE_URL: ["Neon Postgres connection (main branch)", true],
+  SESSION_SECRET: ["signs the 30-day sign-in cookie", true],
+  SETTINGS_KEY: ["encrypts the AI key saved on the Model API page (same value as the jobs' GitHub secret)", true],
+  ALLOWED_ORIGINS: ["browser origins allowed to call this API (the frontend)", false],
+  CF_ACCESS_TEAM_DOMAIN: ["Cloudflare Access team domain (optional login)", false],
+  CF_ACCESS_AUD: ["Cloudflare Access application audience tag (optional login)", true],
+  ADMIN_EMAILS: ["super admins when signing in through Cloudflare Access", false],
+  DEV_USER_EMAIL: ["local development shortcut (ignored in production and off localhost)", false],
+};
+
+type RouteInfo = { method: string; path: string; access: string };
+
+/**
+ * Everything the super admin's "Data & APIs" page lists: the jobs' inventory of outside sources and settings (written
+ * by run.py from config.yaml on every run), this API's own environment and endpoints. Read-only by design.
+ */
+export async function getCatalog(run: Run, apiOrigin: string, routes: RouteInfo[]) {
+  const rows = await run<{ value: string; updated: string }>("SELECT value, updated FROM app_settings WHERE name = 'catalog'");
+  let jobs: unknown = null;
+  try {
+    jobs = rows[0] ? JSON.parse(rows[0].value) : null;
+  } catch {
+    jobs = null;
+  }
+  const env = Object.entries(API_ENV).map(([name, [purpose, secret]]) => {
+    const v = process.env[name];
+    return { name, purpose, secret, set: Boolean(v && v.trim()), value: !secret && v ? v : null };
+  });
+  return { jobs, jobs_updated: rows[0]?.updated ?? null, api: { origin: apiOrigin, env, routes } };
+}
+
 /** Turn a client's extra pages on or off without giving them a new code. */
 export async function setUserPerms(run: Run, email: string, perms: unknown) {
   const clean = cleanPerms(perms);

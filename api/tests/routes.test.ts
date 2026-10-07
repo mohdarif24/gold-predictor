@@ -25,6 +25,13 @@ describe("router", () => {
     expect(match("GET", "/api/logs/")).toBeNull();
   });
 
+  it("labels every admin path as admin-only and every other path sensibly", () => {
+    for (const [, path, access] of ROUTES) {
+      if (path.startsWith("/api/admin/")) expect(access).toBe("admin");
+      if (["/api/login", "/api/logout", "/api/health"].includes(path)) expect(access).toBe("open");
+    }
+  });
+
   it("has every endpoint the frontend uses", () => {
     const paths = new Set(ROUTES.map(([m, p]) => `${m} ${p}`));
     for (const need of ["POST /api/login", "POST /api/logout", "GET /api/me", "GET /api/public/:name", "GET /api/logs/:name",

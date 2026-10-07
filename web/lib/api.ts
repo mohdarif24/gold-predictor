@@ -195,6 +195,19 @@ export type LlmSettings = {
   url: string; model: string; enabled: boolean; key_set: boolean; key_hint: string | null;
   updated: string | null; updated_by: string | null; encryption_ready: boolean;
 };
+export type CatalogParam = { name: string; value: string; where: string };
+export type CatalogSource = {
+  id: string; group: string; name: string; url: string; method: string; code: string; auth: string; refresh: string; params: CatalogParam[];
+};
+export type Catalog = {
+  jobs: { generated: string; sources: CatalogSource[]; model: CatalogParam[]; job_env: { name: string; purpose: string; secret: boolean; set: boolean }[] } | null;
+  jobs_updated: string | null;
+  api: {
+    origin: string;
+    env: { name: string; purpose: string; secret: boolean; set: boolean; value: string | null }[];
+    routes: { method: string; path: string; access: "open" | "signed-in" | "logs" | "admin" }[];
+  };
+};
 export type LlmTest = { ok: boolean; status: number | null; ms: number; answer: string | null; error: string | null };
 export type ApiLogs = {
   rows: { id: number; ts: string; source: string; url: string; model: string; ok: number; status: number | null; ms: number | null; request: string; response: string; error: string }[];
