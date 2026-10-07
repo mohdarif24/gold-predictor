@@ -221,7 +221,13 @@ function SourcesInner() {
               <h3 className="font-semibold">{g.title[lang]}</h3>
               <ul className="flex flex-col gap-1.5 text-sm">
                 {g.items.map((it) => (
-                  <li key={it.text.en} className="flex gap-2"><span aria-label={LEGEND[it.status].label[lang]}>{LEGEND[it.status].icon}</span><span>{it.text[lang]}</span></li>
+                  <li key={it.text.en} className="flex gap-2">
+                    <span aria-label={LEGEND[it.status].label[lang]}>{LEGEND[it.status].icon}</span>
+                    <span>
+                      {it.text[lang]}
+                      {it.note ? <span className="mt-0.5 block text-xs text-muted">{it.note[lang]}</span> : null}
+                    </span>
+                  </li>
                 ))}
               </ul>
             </Card>

@@ -75,6 +75,13 @@ def build(cfg: dict, db=None) -> dict:
                 "params": [_p(k, f"{v['id']} (lag {v.get('lag', 1)} days)", f"config.yaml > fred.{k}")
                            for k, v in (cfg.get("fred") or {}).items()]})
 
+    if cfg.get("gpr"):
+        src.append({"id": "gpr", "group": "risk", "name": "Geopolitical Risk index (Caldara & Iacoviello)",
+                    "url": cfg["gpr"]["url"], "method": "HTTP GET (Excel .xls)", "code": "core/sources.py load_gpr()",
+                    "auth": "none (public file)", "refresh": "every 15 minutes, cached; used after its lag",
+                    "params": [_p("lag (days)", cfg["gpr"].get("lag", 7), "config.yaml > gpr.lag")]
+                    + [_p(name, col, "core/sources.py GPR_COLUMNS") for col, name in sources.GPR_COLUMNS.items()]})
+
     src.append({"id": "cftc", "group": "positioning", "name": "CFTC Commitments of Traders (disaggregated futures)",
                 "url": sources.COT_URL.format(year="{year}"), "method": "HTTP GET (zip of CSV)",
                 "code": "core/sources.py load_cot_raw(), cot_features()", "auth": "none (public)",

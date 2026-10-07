@@ -31,7 +31,8 @@ def providers(name: str, cfg: dict):
     inst = cfg["instruments"][name]
     from nse_etf import yf_data
     from core import sources
-    drivers = lru_cache(maxsize=1)(lambda: {**yf_data.get_drivers(cfg["drivers"]), **sources.load_fred(cfg.get("fred"), cfg["data_dir"])})
+    drivers = lru_cache(maxsize=1)(lambda: {**yf_data.get_drivers(cfg["drivers"]), **sources.load_fred(cfg.get("fred"), cfg["data_dir"]),
+                                            **sources.load_gpr(cfg.get("gpr"), cfg["data_dir"])})
     if inst["source"] == "mt5":
         from xauusd import mt5_data
         return (lambda tf: mt5_data.get_bars(inst["symbol"], tf, inst["bars"][tf])), drivers

@@ -116,7 +116,64 @@ def calendar_features(index: pd.DatetimeIndex) -> pd.DataFrame:
     prev = np.searchsorted(hol.values, day.values, side="right") - 1
     prev = np.clip(prev, 0, len(hol) - 1)
     f["cal_days_since_holiday"] = (day.values - hol.values[prev]).astype("timedelta64[D]").astype(int)
+
+    # India, the second-largest buyer of gold: festival buying, wedding season, and budget day (import duty news)
+    dhanteras = pd.DatetimeIndex(DIWALI) - pd.Timedelta(days=2)
+    f["cal_days_to_dhanteras"] = np.minimum(days_to(dhanteras), 400)
+    f["cal_days_to_akshaya"] = np.minimum(days_to(pd.DatetimeIndex(AKSHAYA_TRITIYA)), 400)
+    f["cal_india_festival_window"] = ((f["cal_days_to_dhanteras"] <= 10) | (f["cal_days_to_akshaya"] <= 10)).astype(float)
+    f["cal_india_wedding_season"] = np.isin(month, WEDDING_MONTHS).astype(float)
+    f["cal_days_to_india_budget"] = np.minimum(days_to(india_budget_days(years)), 400)
     return f
+
+
+# Hindu-calendar festival dates (vary by a day between regions; the windowed features above do not care).
+DIWALI = ["2006-10-21", "2007-11-09", "2008-10-28", "2009-10-17", "2010-11-05", "2011-10-26", "2012-11-13", "2013-11-03",
+          "2014-10-23", "2015-11-11", "2016-10-30", "2017-10-19", "2018-11-07", "2019-10-27", "2020-11-14", "2021-11-04",
+          "2022-10-24", "2023-11-12", "2024-10-31", "2025-10-20", "2026-11-08", "2027-10-29", "2028-10-17", "2029-11-05",
+          "2030-10-26"]
+AKSHAYA_TRITIYA = ["2006-04-30", "2007-04-20", "2008-05-08", "2009-04-27", "2010-05-16", "2011-05-06", "2012-04-24",
+                   "2013-05-13", "2014-05-02", "2015-04-21", "2016-05-09", "2017-04-28", "2018-04-18", "2019-05-07",
+                   "2020-04-26", "2021-05-14", "2022-05-03", "2023-04-22", "2024-05-10", "2025-04-30", "2026-04-19",
+                   "2027-05-09", "2028-04-27", "2029-04-16", "2030-05-05"]
+WEDDING_MONTHS = [11, 12, 1, 2, 4, 5]  # the main Indian wedding seasons (approximate)
+EXTRA_BUDGETS = ["2009-07-06", "2014-02-17", "2014-07-10", "2019-07-05", "2024-07-23"]  # interim / post-election budgets
+
+
+def india_budget_days(years) -> pd.DatetimeIndex:
+    """Union Budget day: the last working day of February until 2016, 1 February since 2017, plus post-election ones."""
+    days = [pd.Timestamp(y, 2, 1) if y >= 2017 else pd.Timestamp(y, 3, 1) - pd.offsets.BDay(1) for y in years]
+    return pd.DatetimeIndex(sorted(set(days) | set(pd.to_datetime(EXTRA_BUDGETS))))
+
+
+# ------------------------------------------------------------------------------------------------ Geopolitical Risk index
+GPR_COLUMNS = {"GPRD_MA7": "gpr", "GPRD_THREAT": "gpr_threat"}  # 7-day average of the daily index, and the "threats" part
+
+
+def load_gpr(spec: dict | None, data_dir: str = "data", client=None) -> dict:
+    """Caldara & Iacoviello's daily Geopolitical Risk index (newspaper-based, free). Moved forward by `lag` days so a
+    value is only used once the file could have contained it. Cached; a failed download falls back to the cache."""
+    if not spec:
+        return {}
+    cache = Path(data_dir) / "gpr" / "gpr_daily.parquet"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import httpx
+
+        get = client.get if client is not None else httpx.get
+        r = get(spec["url"], timeout=90, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
+        r.raise_for_status()
+        raw = pd.read_excel(io.BytesIO(r.content))
+        df = pd.DataFrame({"date": pd.to_datetime(raw["DAY"].astype(int).astype(str), format="%Y%m%d"),
+                           **{k: pd.to_numeric(raw[k], errors="coerce") for k in GPR_COLUMNS}}).dropna()
+        df.to_parquet(cache)
+    except Exception as e:
+        if not cache.exists():
+            print(f"warning: GPR index unavailable: {type(e).__name__}", flush=True)
+            return {}
+        df = pd.read_parquet(cache)
+    idx = pd.DatetimeIndex(df["date"]) + pd.Timedelta(days=int(spec.get("lag", 7)))
+    return {name: pd.Series(df[col].values, index=idx, name=name).sort_index() for col, name in GPR_COLUMNS.items()}
 
 
 # ------------------------------------------------------------------------------------------------ FRED (free, no key)

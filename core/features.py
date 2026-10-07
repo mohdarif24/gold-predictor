@@ -144,6 +144,13 @@ def build_features(df: pd.DataFrame, tf: str, htf: dict | None = None, drivers: 
         hour = df.index.hour + df.index.minute / 60
         f["hour_sin"] = np.sin(2 * np.pi * hour / 24)
         f["hour_cos"] = np.cos(2 * np.pi * hour / 24)
+        # trading sessions in UTC: Asia (Tokyo/Shanghai), London, New York, and the busy London-New York overlap
+        utc = df.index.tz_convert("UTC") if df.index.tz is not None else df.index
+        uh = utc.hour + utc.minute / 60
+        f["sess_asia"] = ((uh >= 0) & (uh < 7)).astype(float)
+        f["sess_london"] = ((uh >= 7) & (uh < 16)).astype(float)
+        f["sess_newyork"] = ((uh >= 12) & (uh < 21)).astype(float)
+        f["sess_overlap"] = ((uh >= 12) & (uh < 16)).astype(float)
     f["dow"] = df.index.dayofweek
 
     for htf_name, hdf in (htf or {}).items():
@@ -156,20 +163,41 @@ def build_features(df: pd.DataFrame, tf: str, htf: dict | None = None, drivers: 
 
     day = df.index.tz_localize(None).normalize() if df.index.tz is not None else df.index.normalize()
     if drivers:
-        D = pd.concat({k: v[~v.index.duplicated()].sort_index() for k, v in drivers.items()}, axis=1).ffill()
+        own = {k: v[~v.index.duplicated()].sort_index().dropna() for k, v in drivers.items()}
+        D = pd.concat(own, axis=1).ffill()
 
         def lagged(series: pd.Series) -> np.ndarray:
-            # one day of lag: the previous day's close is the latest value known while today's bar is open
-            return series.shift(1).reindex(day, method="ffill").values
+            # a value dated day d is first usable on day d + 1 (yesterday's close is the latest known while today's bar
+            # is open). Shifting the dates, not the rows, keeps monthly series from gaining an extra month of delay.
+            s = series.dropna()
+            s.index = s.index + pd.Timedelta(days=1)
+            return s[~s.index.duplicated(keep="last")].reindex(day, method="ffill").values
 
         def lvlz(series: pd.Series) -> pd.Series:
             return (series - series.rolling(252, min_periods=60).mean()) / series.rolling(252, min_periods=60).std()
 
-        for name in D.columns:
+        # changes are computed on each series' own calendar (Bitcoin trades at weekends, India has its own holidays,
+        # macro releases are monthly), so a "5-day change" is always five of that market's own observations
+        for name, s in own.items():
             for n in (1, 5, 20):
-                f[f"{name}_ret{n}"] = lagged(D[name].diff(n) if name in LEVEL_DRIVERS else D[name].pct_change(n))
-            f[f"{name}_lvlz"] = lagged(lvlz(D[name]))
+                f[f"{name}_ret{n}"] = lagged(s.diff(n) if name in LEVEL_DRIVERS else s.pct_change(n))
+            f[f"{name}_lvlz"] = lagged(lvlz(s))
         have = set(D.columns)
+        if {"fedfunds_fut", "fed_funds"} <= have:
+            # 100 minus the futures price is the average Fed rate the market expects next month: above today's rate =
+            # a hike priced in, below = a cut priced in (a free stand-in for CME FedWatch)
+            f["x_fed_expected_change"] = lagged((100 - D["fedfunds_fut"]) - D["fed_funds"])
+        if {"goldbees", "global_gold", "usdinr"} <= have:
+            # Indian gold (rupee ETF) against the world price converted to rupees: a rising premium = strong local demand
+            prem = np.log(D["goldbees"]) - np.log(D["global_gold"] * D["usdinr"])
+            f["x_india_premium_lvlz"] = lagged(lvlz(prem))
+            f["x_india_premium_chg5"] = lagged(prem.diff(5))
+        for name in ("cpi", "pce", "payrolls"):
+            if name in own:
+                # "surprise" stand-in: this release's change against the average of the previous 12 (consensus
+                # forecasts are not free; this measures how unusual the new number is)
+                chg = own[name].pct_change()
+                f[f"x_{name}_surprise"] = lagged((chg - chg.shift(1).rolling(12).mean()) / chg.shift(1).rolling(12).std())
         if {"global_gold", "silver"} <= have:
             f["x_gold_silver_lvlz"] = lagged(lvlz(D["global_gold"] / D["silver"]))
         if {"copper", "global_gold"} <= have:

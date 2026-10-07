@@ -35,7 +35,7 @@ export const FLOW: Row[] = [
     label: { en: "1. Collect", bn: "১. সংগ্রহ" },
     boxes: [
       { kind: "data", title: { en: "Gold prices", bn: "সোনার দাম" }, body: { en: "5-min, 15-min, hourly and daily bars (Yahoo Finance; Exness MT5 when connected).", bn: "৫ মিনিট, ১৫ মিনিট, ঘণ্টা ও দিনের বার (Yahoo Finance; সংযুক্ত থাকলে Exness MT5)।" } },
-      { kind: "data", title: { en: "Markets & macro", bn: "বাজার ও অর্থনীতি" }, body: { en: "18 market series (dollar, yields, silver, oil, stocks, VIX) + 6 US Federal Reserve series (real yield, inflation expectations, policy rate).", bn: "১৮টি বাজার-সিরিজ (ডলার, বন্ড-সুদ, রুপা, তেল, শেয়ার, VIX) + মার্কিন ফেডারেল রিজার্ভের ৬টি সিরিজ (প্রকৃত সুদ, মূল্যস্ফীতির প্রত্যাশা, নীতি-সুদ)।" } },
+      { kind: "data", title: { en: "Markets & macro", bn: "বাজার ও অর্থনীতি" }, body: { en: "23 market series (dollar, taka, yields, Fed futures, silver, oil, stocks, VIX, gold volatility, Bitcoin, India’s gold ETF) + 10 US Federal Reserve series (real yield, inflation expectations, policy rate, CPI, jobs, PCE, policy uncertainty) + the daily Geopolitical Risk index.", bn: "২৩টি বাজার-সিরিজ (ডলার, টাকা, বন্ড-সুদ, ফেড ফিউচার্স, রুপা, তেল, শেয়ার, VIX, সোনার অস্থিরতা, বিটকয়েন, ভারতের সোনার ETF) + মার্কিন ফেডারেল রিজার্ভের ১০টি সিরিজ (প্রকৃত সুদ, মূল্যস্ফীতির প্রত্যাশা, নীতি-সুদ, CPI, চাকরি, PCE, নীতির অনিশ্চয়তা) + দৈনিক ভূরাজনৈতিক ঝুঁকি সূচক।" } },
       { kind: "data", title: { en: "Positioning & calendar", bn: "অবস্থান ও ক্যালেন্ডার" }, body: { en: "Weekly CFTC report of hedge-fund and producer bets on gold; jobs-report days, expiries, month ends.", bn: "হেজ ফান্ড ও উৎপাদকদের সোনার বাজির সাপ্তাহিক CFTC প্রতিবেদন; চাকরির প্রতিবেদনের দিন, মেয়াদ শেষ, মাসের শেষ।" } },
       { kind: "data", title: { en: "News", bn: "খবর" }, body: { en: "Google News headlines every 15 minutes, scored −1…+1 for gold by keyword rules or an AI model.", bn: "প্রতি ১৫ মিনিটে Google News-এর শিরোনাম, সোনার জন্য −১…+১ স্কোর: কীওয়ার্ড নিয়ম বা AI মডেল দিয়ে।" } },
     ],
@@ -49,7 +49,7 @@ export const FLOW: Row[] = [
   {
     label: { en: "3. Describe", bn: "৩. বর্ণনা" },
     boxes: [
-      { kind: "step", title: { en: "≈150 features in 6 families", bn: "৬ পরিবারে ≈১৫০টি বৈশিষ্ট্য" }, body: { en: "Price behaviour, chart indicators, dollar & rates, positioning, calendar, news mood. Plus a market-regime label (trending, ranging, high/low volatility, breakout, abnormal).", bn: "দামের আচরণ, চার্ট-সূচক, ডলার ও সুদ, অবস্থান, ক্যালেন্ডার, খবরের হাওয়া। সাথে বাজারের অবস্থা (ট্রেন্ড, রেঞ্জ, বেশি/কম ওঠানামা, ব্রেকআউট, অস্বাভাবিক)।" } },
+      { kind: "step", title: { en: "≈200 features in 6 families", bn: "৬ পরিবারে ≈২০০টি বৈশিষ্ট্য" }, body: { en: "Price behaviour, chart indicators, dollar & rates, positioning, calendar, news mood. Plus a market-regime label (trending, ranging, high/low volatility, breakout, abnormal).", bn: "দামের আচরণ, চার্ট-সূচক, ডলার ও সুদ, অবস্থান, ক্যালেন্ডার, খবরের হাওয়া। সাথে বাজারের অবস্থা (ট্রেন্ড, রেঞ্জ, বেশি/কম ওঠানামা, ব্রেকআউট, অস্বাভাবিক)।" } },
       { kind: "step", title: { en: "Target", bn: "লক্ষ্য" }, body: { en: "1 if the close after the window is above today’s close, else 0.", bn: "সময়সীমা শেষের দাম আজকের দামের উপরে হলে ১, না হলে ০।" } },
     ],
   },
