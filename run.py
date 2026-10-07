@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from core import alerts, catalog, news, pipeline, settings, store
+from core import alerts, catalog, mentor, news, pipeline, settings, store
 
 try:  # local convenience only; CI passes real environment variables
     from dotenv import load_dotenv
@@ -102,6 +102,14 @@ def run_command(command: str, name: str, cfg: dict, db):
             refresh_news_once(db)
         results = pipeline.predict(name, cfg, get_bars, get_drivers, db, get_news=get_news)
         show(results)
+        if command == "tick" and any(r.get("is_new") for r in results):
+            try:  # the AI mentor comments on every new reading (only when an AI model is set up)
+                m = mentor.comment(db, name, cfg, results)
+                if m:
+                    print(f"mentor: {m['body']['en']['headline']}" + ("" if m["grounded"] else f" (unverified numbers: {m['issues']})"), flush=True)
+            except Exception as e:  # commentary is extra; never block predictions
+                db.rollback()
+                print(f"mentor skipped: {type(e).__name__}: {str(e)[:120]}", flush=True)
         try:
             alerts.notify_new(db, cfg, results)
         except Exception as e:  # alerts are optional and must never break prediction

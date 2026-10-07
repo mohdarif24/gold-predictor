@@ -17,6 +17,7 @@ const USER_NAV: NavItem[] = [
 ];
 const ADMIN_NAV: NavItem[] = [
   { href: "/", key: "nav.signal" },
+  { href: "/mentor", key: "nav.mentor" },
   { href: "/dashboard", key: "nav.dashboard" },
   { href: "/logs", key: "nav.logs" },
   { href: "/checklist", key: "nav.checklist" },

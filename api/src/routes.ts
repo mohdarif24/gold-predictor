@@ -3,7 +3,7 @@
  * `secured(..., { admin: true })` = super admin only; `{ perm }` = super admin or a client given that page.
  */
 import { SESSION_COOKIE, SESSION_DAYS, createSession, hashCode } from "./lib/access";
-import { createUser, getApiLogs, getCatalog, getLlmSettings, listUsers, putLlmSettings, setUserPerms, testLlm } from "./lib/admin";
+import { createUser, getApiLogs, getCatalog, getLlmSettings, getMentor, listUsers, putLlmSettings, setUserPerms, testLlm } from "./lib/admin";
 import { run } from "./lib/db";
 import { type Handler, json, secured } from "./lib/http";
 import {
@@ -110,6 +110,7 @@ export const ROUTES: [method: string, path: string, access: Access, handler: Han
     const b = (await body(req)) ?? {};
     return testLlm(run, { url: str(b.url), model: str(b.model), key: str(b.key) });
   }, { admin: true })],
+  ["GET", "/api/admin/mentor/:name", "admin", secured(({ req, run, params }) => getMentor(run, params.name, Number(query(req).get("limit") ?? 20)), { admin: true })],
   ["GET", "/api/admin/catalog", "admin", secured(({ req, run }) => getCatalog(run, new URL(req.url).origin, ROUTES.map(([m, p, a]) => ({ method: m, path: p, access: a }))), { admin: true })],
   ["GET", "/api/admin/api-logs", "admin", secured(({ req, run }) => {
     const q = query(req);

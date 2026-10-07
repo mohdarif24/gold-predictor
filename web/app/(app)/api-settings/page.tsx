@@ -13,8 +13,19 @@ import {
 import { fmtDateTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 
-// OpenAI-compatible providers with a free tier. Model names change over time: edit them if a provider renames one.
+// OpenAI-compatible providers (any other one works too: type its address and model). Model names change over time:
+// edit them if a provider renames one. One model serves both news scoring and the AI mentor.
 const PRESETS = [
+  {
+    name: "DeepSeek",
+    url: "https://api.deepseek.com/chat/completions",
+    model: "deepseek-chat",
+  },
+  {
+    name: "OpenAI",
+    url: "https://api.openai.com/v1/chat/completions",
+    model: "gpt-4o-mini",
+  },
   {
     name: "GitHub Models",
     url: "https://models.github.ai/inference/chat/completions",

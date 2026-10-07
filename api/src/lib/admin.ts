@@ -94,6 +94,24 @@ export async function getCatalog(run: Run, apiOrigin: string, routes: RouteInfo[
   return { jobs, jobs_updated: rows[0]?.updated ?? null, api: { origin: apiOrigin, env, routes } };
 }
 
+/** The AI mentor's newest comments for one instrument (written by core/mentor.py on every new reading). */
+export async function getMentor(run: Run, name: string, limit = 20) {
+  const n = Math.max(1, Math.min(Number.isFinite(limit) ? limit : 20, 100));
+  const rows = await run<{ id: number; ts: string; model: string; body: string; grounded: number; issues: string | null }>(
+    "SELECT id::int AS id, ts, model, body, grounded, issues FROM mentor_comments WHERE instrument = $1 ORDER BY id DESC LIMIT $2",
+    [name, n],
+  );
+  return rows.map((r) => {
+    let body: unknown = null;
+    try {
+      body = JSON.parse(r.body);
+    } catch {
+      body = null;
+    }
+    return { id: r.id, ts: r.ts, model: r.model, grounded: Boolean(r.grounded), issues: r.issues || null, body };
+  });
+}
+
 /** Turn a client's extra pages on or off without giving them a new code. */
 export async function setUserPerms(run: Run, email: string, perms: unknown) {
   const clean = cleanPerms(perms);

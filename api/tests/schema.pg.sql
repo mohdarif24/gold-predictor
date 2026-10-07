@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS access_codes(
 CREATE TABLE IF NOT EXISTS user_settings(
   email TEXT PRIMARY KEY, telegram_chat_id TEXT, telegram_on INTEGER DEFAULT 0, email_on INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS mentor_comments(
+  id BIGSERIAL PRIMARY KEY, ts TEXT, instrument TEXT, model TEXT, body TEXT, snapshot TEXT, grounded INTEGER, issues TEXT
+);
 CREATE TABLE IF NOT EXISTS app_settings(name TEXT PRIMARY KEY, value TEXT, updated TEXT, updated_by TEXT);
 CREATE TABLE IF NOT EXISTS api_logs(
   id BIGSERIAL PRIMARY KEY, ts TEXT, source TEXT, url TEXT, model TEXT, ok INTEGER, status INTEGER, ms INTEGER,

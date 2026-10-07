@@ -211,6 +211,13 @@ export type Catalog = {
     routes: { method: string; path: string; access: "open" | "signed-in" | "logs" | "admin" }[];
   };
 };
+export type MentorBody = {
+  headline: string; market: string[]; scenarios: { if: string; then: string }[]; risk: string[];
+  options: { choice: string; when: string }[]; bottom_line: string;
+};
+export type MentorComment = {
+  id: number; ts: string; model: string; grounded: boolean; issues: string | null; body: { en: MentorBody; bn: MentorBody } | null;
+};
 export type LlmTest = { ok: boolean; status: number | null; ms: number; answer: string | null; error: string | null };
 export type ApiLogs = {
   rows: { id: number; ts: string; source: string; url: string; model: string; ok: number; status: number | null; ms: number | null; request: string; response: string; error: string }[];
