@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as admin from "../src/lib/admin";
 import * as q from "../src/lib/queries";
 import { decrypt, encrypt } from "../src/lib/secret";
+import { hashCode } from "../src/lib/access";
 
 let db: PGlite;
 let run: q.Run;
@@ -69,6 +70,33 @@ describe("roles", () => {
     expect((await q.accessOf(run, "client@x.com"))?.perms).toEqual([]);
     await expect(admin.setUserPerms(run, "nobody@x.com", ["logs"])).rejects.toMatchObject({ status: 404 });
     expect(q.parsePerms(" logs ,admin,")).toEqual(["logs"]);
+  });
+});
+
+describe("creating access codes", () => {
+  it("generates a strong code when none is typed, and stores only its hash", async () => {
+    const r = await admin.createUser(run, { email: " New@X.com ", role: "user", perms: ["logs"] });
+    expect(r).toMatchObject({ email: "new@x.com", role: "user", perms: ["logs"], typed: false });
+    expect(r.code).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    const raw = await run<{ code_hash: string }>("SELECT code_hash FROM access_codes WHERE email = 'new@x.com'");
+    expect(raw[0].code_hash).not.toContain(r.code);
+    expect(await q.emailForCode(run, await hashCode(r.code))).toBe("new@x.com");
+  });
+
+  it("accepts a code the super admin types, and it signs that person in", async () => {
+    const r = await admin.createUser(run, { email: "typed@x.com", code: "  Gold-2026-Rahim  " });
+    expect(r).toMatchObject({ code: "Gold-2026-Rahim", typed: true });
+    expect(await q.emailForCode(run, await hashCode("Gold-2026-Rahim"))).toBe("typed@x.com");
+    // giving the same person the same code again is fine (for example to change their role)
+    await expect(admin.createUser(run, { email: "typed@x.com", role: "admin", code: "Gold-2026-Rahim" })).resolves.toMatchObject({ role: "admin" });
+  });
+
+  it("refuses short codes, codes with spaces, and a code another person already has", async () => {
+    await expect(admin.createUser(run, { email: "a@x.com", code: "short" })).rejects.toMatchObject({ status: 400 });
+    await expect(admin.createUser(run, { email: "a@x.com", code: "has a space inside" })).rejects.toMatchObject({ status: 400 });
+    await expect(admin.createUser(run, { email: "other@x.com", code: "Gold-2026-Rahim" })).rejects.toMatchObject({ status: 409 });
+    await expect(admin.createUser(run, { email: "not-an-email", code: "LongEnough123" })).rejects.toMatchObject({ status: 400 });
+    expect(await q.roleOf(run, "other@x.com")).toBeNull();
   });
 });
 

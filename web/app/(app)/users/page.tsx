@@ -13,6 +13,8 @@ function UsersInner() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
   const [logs, setLogs] = useState(false);
+  const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const [code, setCode] = useState("");
   const [made, setMade] = useState<{ email: string; code: string } | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,8 +27,10 @@ function UsersInner() {
     setErr("");
     setMade(null);
     try {
-      setMade(await apiFetch<{ email: string; code: string }>("admin/users", { method: "POST", body: JSON.stringify({ email, role, perms: logs ? ["logs"] : [] }) }));
+      const payload = { email, role, perms: logs ? ["logs"] : [], ...(mode === "manual" ? { code } : {}) };
+      setMade(await apiFetch<{ email: string; code: string }>("admin/users", { method: "POST", body: JSON.stringify(payload) }));
       setEmail("");
+      setCode("");
       list.reload();
     } catch (ex) {
       fail(ex);
@@ -71,15 +75,34 @@ function UsersInner() {
               <option value="admin">{t("users.role.admin")}</option>
             </select>
           </div>
-          <button type="submit" disabled={busy} className="rounded-lg bg-brass px-4 py-2 font-semibold text-bg disabled:opacity-60">
-            {t("users.add")}
-          </button>
+          <fieldset className="basis-full">
+            <legend className="mb-1 text-sm font-medium">{t("users.code.label")}</legend>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+              {(["auto", "manual"] as const).map((m) => (
+                <label key={m} className="flex items-center gap-2">
+                  <input type="radio" name="codemode" checked={mode === m} onChange={() => setMode(m)} className="h-4 w-4" />
+                  {t(m === "auto" ? "users.code.auto" : "users.code.manual")}
+                </label>
+              ))}
+            </div>
+            {mode === "manual" ? (
+              <div className="mt-2">
+                <input id="code" type="text" required minLength={10} maxLength={100} pattern="\S+" autoComplete="off" spellCheck={false}
+                  value={code} onChange={(e) => setCode(e.target.value)} aria-describedby="code-help"
+                  className="w-full rounded-lg border border-line bg-bg px-3 py-2 font-mono" />
+                <p id="code-help" className="mt-1 text-xs text-muted">{t("users.code.help")}</p>
+              </div>
+            ) : null}
+          </fieldset>
           {role === "user" ? (
             <label className="flex basis-full items-center gap-2 text-sm">
               <input type="checkbox" checked={logs} onChange={(e) => setLogs(e.target.checked)} className="h-4 w-4" />
               {t("users.perm.logs")}
             </label>
           ) : null}
+          <button type="submit" disabled={busy} className="rounded-lg bg-brass px-4 py-2 font-semibold text-bg disabled:opacity-60">
+            {t("users.add")}
+          </button>
         </form>
         {made ? (
           <div role="status" className="mt-4 rounded-lg border border-buy bg-buy-soft p-3 text-sm">

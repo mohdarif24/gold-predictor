@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import pytest
 
 from core import alerts, store
 
@@ -151,6 +152,14 @@ def test_access_codes_are_stored_hashed_replaceable_and_revocable(db):
     second = ac.add(db, "client@example.com")  # a new code replaces the old one
     assert second != code and db.execute("SELECT COUNT(*) AS n FROM access_codes").fetchone()["n"] == 1
     assert ac.revoke(db, "client@example.com") and not ac.revoke(db, "client@example.com")
+    # a code chosen by the administrator: checked for length, spaces, and not being someone else's
+    assert ac.add(db, "a@x.com", code=" My-Own-Code-1 ") == "My-Own-Code-1"
+    for bad in ("short", "has spaces in it"):
+        with pytest.raises(ValueError):
+            ac.add(db, "b@x.com", code=bad)
+    with pytest.raises(ValueError):
+        ac.add(db, "b@x.com", code="My-Own-Code-1")
+    assert ac.add(db, "a@x.com", code="My-Own-Code-1") == "My-Own-Code-1"  # the same person may keep their code
 
 
 def test_roles_and_adding_a_column_to_an_existing_database(tmp_path):

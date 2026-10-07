@@ -3,7 +3,7 @@
  * `secured(..., { admin: true })` = super admin only; `{ perm }` = super admin or a client given that page.
  */
 import { SESSION_COOKIE, SESSION_DAYS, createSession, hashCode } from "./lib/access";
-import { cleanPerms, getApiLogs, getLlmSettings, listUsers, putLlmSettings, setUserPerms, testLlm } from "./lib/admin";
+import { createUser, getApiLogs, getLlmSettings, listUsers, putLlmSettings, setUserPerms, testLlm } from "./lib/admin";
 import { run } from "./lib/db";
 import { type Handler, json, secured } from "./lib/http";
 import {
@@ -14,14 +14,6 @@ import {
 const body = async (req: Request) => req.json().catch(() => null);
 const query = (req: Request) => new URL(req.url).searchParams;
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
-
-/** 22 random URL-safe characters (~128 bits), the same shape as scripts/access_code.py makes. */
-function newCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function sessionCookie(req: Request, value: string, maxAge: number): string {
   // SameSite=Lax still travels between the frontend and API hosts because both sit under the same site
@@ -87,22 +79,8 @@ export const ROUTES: [method: string, path: string, handler: Handler][] = [
   ["GET", "/api/news", secured(({ run }) => getNews(run), { admin: true })],
 
   ["GET", "/api/admin/users", secured(({ run }) => listUsers(run), { admin: true })],
-  // create a person (or give an existing person a new code); the code is returned once and only its hash is stored
-  ["POST", "/api/admin/users", secured(async ({ req, run }) => {
-    const b = await body(req);
-    const email = String(b?.email ?? "").trim().toLowerCase();
-    const role = b?.role === "admin" ? "admin" : "user";
-    const perms = cleanPerms(b?.perms);
-    if (!EMAIL.test(email)) throw new HttpError(400, "enter a valid email");
-    const code = newCode();
-    await run(
-      "INSERT INTO access_codes(email, code_hash, created, role, perms) VALUES($1, $2, $3, $4, $5) " +
-        "ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash, created = excluded.created, last_used = NULL, " +
-        "role = excluded.role, perms = excluded.perms",
-      [email, await hashCode(code), new Date().toISOString().slice(0, 19) + "+00:00", role, perms.join(",")],
-    );
-    return { email, role, perms, code };
-  }, { admin: true })],
+  // create a person (or give an existing person a new code): generated, or typed by the super admin; only the hash is stored
+  ["POST", "/api/admin/users", secured(async ({ req, run }) => createUser(run, (await body(req)) ?? {}), { admin: true })],
   ["PATCH", "/api/admin/users", secured(async ({ req, run }) => {
     const b = await body(req);
     return setUserPerms(run, String(b?.email ?? ""), b?.perms);

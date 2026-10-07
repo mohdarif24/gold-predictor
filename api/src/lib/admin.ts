@@ -2,6 +2,7 @@
  * What only the site administrator can see and change: the LLM provider used for news scoring, and the log of every
  * outside API call (written here for test calls and by core/settings.py for the scheduled jobs).
  */
+import { hashCode } from "./access";
 import { HttpError, PERMS, type Perm, type Run, parsePerms } from "./queries";
 import { decrypt, encrypt, encryptionReady } from "./secret";
 
@@ -20,6 +21,44 @@ export async function listUsers(run: Run) {
 export function cleanPerms(v: unknown): Perm[] {
   const asked = Array.isArray(v) ? v.map(String) : [];
   return PERMS.filter((p) => asked.includes(p));
+}
+
+/** 22 random URL-safe characters (~128 bits), the same shape as scripts/access_code.py makes. */
+export function newCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const MIN_CODE = 10; // the sign-in endpoint refuses anything shorter
+const MAX_CODE = 100;
+
+/**
+ * Create a person, or give an existing person a new code. The super admin either lets the server generate the code or
+ * types one; either way only its hash is stored and the code is returned once.
+ */
+export async function createUser(run: Run, body: { email?: unknown; role?: unknown; perms?: unknown; code?: unknown }) {
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const role = body.role === "admin" ? "admin" : "user";
+  const perms = cleanPerms(body.perms);
+  if (!EMAIL.test(email)) throw new HttpError(400, "enter a valid email");
+  const typed = typeof body.code === "string" ? body.code.trim() : "";
+  if (typed) {
+    if (typed.length < MIN_CODE || typed.length > MAX_CODE) throw new HttpError(400, `the code must be ${MIN_CODE} to ${MAX_CODE} characters`);
+    if (/\s/.test(typed)) throw new HttpError(400, "the code cannot contain spaces");
+  }
+  const code = typed || newCode();
+  const hash = await hashCode(code);
+  // a code identifies the person at sign-in, so two people can never share one
+  const taken = await run<{ email: string }>("SELECT email FROM access_codes WHERE code_hash = $1 AND email <> $2", [hash, email]);
+  if (taken.length) throw new HttpError(409, "this code is already used by someone else; choose another");
+  await run(
+    "INSERT INTO access_codes(email, code_hash, created, role, perms) VALUES($1, $2, $3, $4, $5) " +
+      "ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash, created = excluded.created, last_used = NULL, " +
+      "role = excluded.role, perms = excluded.perms",
+    [email, hash, nowIso(), role, perms.join(",")],
+  );
+  return { email, role, perms, code, typed: Boolean(typed) };
 }
 
 /** Turn a client's extra pages on or off without giving them a new code. */
