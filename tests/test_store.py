@@ -107,6 +107,58 @@ def test_postgres_survives_reconnects_and_repeated_statements(pg_dsn):
         db.close()
 
 
+def test_reconnects_after_an_idle_drop_but_never_loses_pending_writes():
+    """Neon closes a connection left idle while the model study computes for hours (this failed the 2026-10-07 run)."""
+    import psycopg
+
+    class Cur:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def execute(self, sql, params):
+            if self.conn.dead:
+                raise psycopg.OperationalError("consuming input failed: SSL connection has been closed unexpectedly")
+            self.conn.log.append(sql)
+
+    class Conn:
+        def __init__(self, dead=False):
+            self.dead, self.log, self.closed = dead, [], False
+
+        def cursor(self):
+            return Cur(self)
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    opened = []
+
+    def reconnect():
+        opened.append(Conn())
+        return opened[-1]
+
+    first = Conn(dead=True)
+    db = store.Db(first, "postgres", reconnect=reconnect)
+    db.execute("SELECT 1")  # nothing pending: reconnects and repeats the statement
+    assert first.closed and db.conn is opened[0] and opened[0].log == ["SELECT 1"]
+    db.execute("INSERT INTO t VALUES (%s)", (1,))
+    db.commit()
+    db.conn.dead = True
+    db.execute("UPDATE t SET x = 1")  # after a commit it is safe again
+    assert len(opened) == 2 and opened[1].log == ["UPDATE t SET x = 1"]
+
+    db2 = store.Db(Conn(), "postgres", reconnect=lambda: Conn())
+    db2.execute("INSERT INTO t VALUES (%s)", (1,))  # uncommitted write...
+    db2.conn.dead = True
+    with pytest.raises(psycopg.OperationalError):  # ...so a drop must surface, not be papered over
+        db2.execute("INSERT INTO t VALUES (%s)", (2,))
+
+
 def test_copy_between_databases_keeps_everything_and_the_id_counter(tmp_path, pg_dsn):
     """Local SQLite -> Postgres (what moving to Neon does). Re-running must not duplicate, and new rows must get fresh ids."""
     import importlib.util

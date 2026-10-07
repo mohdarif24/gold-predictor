@@ -70,22 +70,45 @@ def _scalar(v):
 
 
 class Db:
-    def __init__(self, conn, kind: str):
+    def __init__(self, conn, kind: str, reconnect=None):
         self.conn, self.kind = conn, kind
+        self._reconnect = reconnect  # Postgres only: opens a fresh connection
+        self._dirty = False  # statements sent since the last commit / rollback
 
     def execute(self, sql: str, params=()):
         params = tuple(_scalar(p) for p in params)
         if self.kind == "postgres":
-            cur = self.conn.cursor()
-            cur.execute(sql.replace("?", "%s"), params)
+            import psycopg
+
+            try:
+                cur = self.conn.cursor()
+                cur.execute(sql.replace("?", "%s"), params)
+            except psycopg.OperationalError:
+                # Neon closes connections left idle during long computations (the model study runs for hours). When
+                # nothing is pending, a fresh connection loses nothing, so reconnect once and repeat the statement.
+                # With uncommitted work the error must surface: silently dropping it would lose data.
+                if self._dirty or self._reconnect is None:
+                    raise
+                print("database connection was closed while idle; reconnecting", flush=True)
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
+                self.conn = self._reconnect()
+                cur = self.conn.cursor()
+                cur.execute(sql.replace("?", "%s"), params)
+            if not sql.lstrip()[:6].upper() == "SELECT":  # a read leaves nothing to lose
+                self._dirty = True
             return cur
         return self.conn.execute(sql, params)
 
     def commit(self):
         self.conn.commit()
+        self._dirty = False
 
     def rollback(self):
         self.conn.rollback()
+        self._dirty = False
 
     def close(self):
         self.conn.close()
@@ -104,14 +127,16 @@ def connect(target: str) -> Db:
         # prepare_threshold=None: Neon's pooled endpoint is PgBouncer in transaction mode, which cannot keep prepared
         # statements; this is psycopg's documented setting for that. (Not exercised by the local tests.)
         # A few retries cover a database that is waking up or still closing the previous connection.
-        for attempt in range(4):
-            try:
-                db = Db(psycopg.connect(target, row_factory=dict_row, prepare_threshold=None), "postgres")
-                break
-            except psycopg.OperationalError:
-                if attempt == 3:
-                    raise
-                time.sleep(1.5 * (attempt + 1))
+        def open_conn():
+            for attempt in range(4):
+                try:
+                    return psycopg.connect(target, row_factory=dict_row, prepare_threshold=None)
+                except psycopg.OperationalError:
+                    if attempt == 3:
+                        raise
+                    time.sleep(1.5 * (attempt + 1))
+
+        db = Db(open_conn(), "postgres", reconnect=open_conn)
     else:
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         # check_same_thread=False: connections are never shared between concurrent users of this module
